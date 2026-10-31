@@ -85,6 +85,8 @@ export function App() {
       if (v) setVue(v);
     };
     window.addEventListener('hashchange', surHash);
+    // L'ancre a pu changer entre le premier rendu et la pose de l'écouteur : on resynchronise.
+    surHash();
     return () => window.removeEventListener('hashchange', surHash);
   }, []);
   useEffect(() => {
