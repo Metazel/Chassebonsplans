@@ -135,7 +135,8 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
                 ligne = lignes.get(r["route_id"], {})
                 trains.append({
                     "sens": sens,
-                    "numero": numero(r),
+                    # Trenitalia France : le numéro commercial est l'identifiant de ligne (6119, 6105…).
+                    "numero": r["route_id"].strip()[:12] if source == "Trenitalia France" else numero(r),
                     "operateur": operateur(source, ligne, r, p[dep_cle][3]),
                     "gareDepart": p[dep_cle][2],
                     "gareArrivee": p[arr_cle][2],

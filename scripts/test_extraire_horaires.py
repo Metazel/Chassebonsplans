@@ -48,8 +48,8 @@ SNCF = {
 TRENITALIA = {
     "agency.txt": "agency_id,agency_name\nTI,Trenitalia France\n",
     "stops.txt": "stop_id,stop_name\nPGL,PARIS GARE DE LYON\nMSC,MARSEILLE ST CHARLES\n",
-    "routes.txt": "route_id,agency_id,route_short_name\nFR,TI,Frecciarossa\n",
-    "trips.txt": "route_id,service_id,trip_id,trip_short_name\nFR,W,F1,9241\n",
+    "routes.txt": "route_id,agency_id,route_short_name\n6119,TI,Paris-Gare-de-Lyon/Marseille-St-Charles\n",
+    "trips.txt": "route_id,service_id,trip_id\n6119,W,70073\n",
     "stop_times.txt": "trip_id,arrival_time,departure_time,stop_id,stop_sequence\nF1,,06:52:00,MSC,1\nF1,10:12:00,,PGL,2\n",
     "calendar.txt": "service_id,monday,tuesday,wednesday,thursday,friday,saturday,sunday,start_date,end_date\nW,1,1,1,1,1,1,1,20261102,20261104\n",
 }
@@ -81,6 +81,7 @@ class Extraction(unittest.TestCase):
         trains = ex.extraire(gtfs(TRENITALIA), "Trenitalia France", DEBUT, FIN)
         self.assertEqual(len(trains), 1)
         self.assertEqual(trains[0]["operateur"], "Trenitalia (Frecciarossa)")
+        self.assertEqual(trains[0]["numero"], "6119", "numéro commercial Trenitalia = route_id")
         self.assertEqual(trains[0]["depart"], 6 * 60 + 52)
         self.assertEqual(trains[0]["arrivee"], 10 * 60 + 12)
 
