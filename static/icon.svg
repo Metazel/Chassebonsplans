@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chasse aux bons plans">
+  <rect width="512" height="512" rx="112" fill="#0b5d50"/>
+  <path d="M136 176h240a24 24 0 0 1 24 24v28a36 36 0 0 0 0 56v28a24 24 0 0 1-24 24H136a24 24 0 0 1-24-24v-28a36 36 0 0 0 0-56v-28a24 24 0 0 1 24-24z" fill="#f6f5f2"/>
+  <path d="M300 186v140" stroke="#0b5d50" stroke-width="10" stroke-dasharray="14 14" stroke-linecap="round"/>
+  <path d="M168 300l84-88" stroke="#0b5d50" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="176" cy="222" r="18" fill="#0b5d50"/>
+  <circle cx="244" cy="290" r="18" fill="#0b5d50"/>
+</svg>

@@ -1,0 +1,11 @@
+{
+  "version": "2026-10-31",
+  "trajetGareDomicileMin": 15,
+  "limiteDinerDomicile": "21:45",
+  "coutRepasEuros": 10,
+  "toleranceEuros": 2,
+  "meta": {
+    "source": "Choix de l'utilisateur : dîner à la maison jusqu'à 21h45 (arrivée en gare 21h30 + 15 min de trajet), sinon un repas à bord d'environ 10 €.",
+    "verifieLe": "2026-10-31"
+  }
+}
