@@ -428,6 +428,8 @@ def serve() -> ThreadingHTTPServer:
 
 def main() -> int:
     if not (ROOT / "dist" / "index.html").exists():
+        contenu = sorted(p.name for p in ROOT.iterdir())
+        annoter("error", "dist absent", f"dist/index.html introuvable ; racine : {contenu}")
         print("dist/ absent : lancez npm run build", file=sys.stderr)
         return 2
     srv = serve()
@@ -477,4 +479,8 @@ def annoter(niveau: str, titre: str, message: str) -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as exc:  # noqa: BLE001 - toute erreur hors scénario est rendue visible
+        annoter("error", "recette interrompue", f"{type(exc).__name__}: {exc} | {traceback.format_exc()[-400:]}")
+        raise
