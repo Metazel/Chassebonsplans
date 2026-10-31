@@ -15,7 +15,7 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self' data:",
+  "img-src 'self'",
   "font-src 'self'",
   "connect-src 'self'",
   "manifest-src 'self'",

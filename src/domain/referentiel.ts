@@ -15,6 +15,10 @@ const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 export function estAReverifier(verifieLe: string, aujourdhui: Date, mois = 6): boolean {
   const m = ISO.exec(verifieLe);
   if (!m) return true;
-  const limite = new Date(Number(m[1]), Number(m[2]) - 1 + mois, Number(m[3]));
+  const annee = Number(m[1]);
+  const moisCible = Number(m[2]) - 1 + mois;
+  // Jour ramené au dernier jour du mois cible (31/08 + 6 mois = 28/02 ou 29/02, pas 03/03).
+  const dernierJour = new Date(annee, moisCible + 1, 0).getDate();
+  const limite = new Date(annee, moisCible, Math.min(Number(m[3]), dernierJour), 23, 59, 59);
   return aujourdhui.getTime() > limite.getTime();
 }

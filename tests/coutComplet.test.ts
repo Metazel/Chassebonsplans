@@ -76,20 +76,42 @@ describe('coût complet — limites', () => {
     const reco = recommander([train('c', '20:00', '23:00', 25), train('a', '16:00', '19:00', 50), train('b', '17:00', '20:00', 35)], P)!;
     expect(reco.classement.map((e) => e.id)).toEqual(['b', 'c', 'a']);
   });
-  it('propriété : le train retenu n’est jamais plus cher que le moins cher + tolérance', () => {
+  it('tolérance bornes comprises : 2,00 € d’écart → le plus tôt ; 2,01 € → le moins cher', () => {
+    const tardif = train('tardif', '19:00', '22:00', 30); // 40 € avec le repas
+    expect(recommander([tardif, train('tot', '17:45', '20:45', 42)], P)!.retenu.id).toBe('tot');
+    expect(recommander([tardif, train('tot', '17:45', '20:45', 42.01)], P)!.retenu.id).toBe('tardif');
+  });
+  it('même coût et même arrivée : égalité signalée avec le concurrent', () => {
+    const reco = recommander([train('a', '17:45', '20:45', 40), train('b', '18:00', '20:45', 40)], P)!;
+    expect(reco.motif).toBe('egalite-plus-tot');
+    expect(reco.concurrent!.arriveeDomicile).toBe(reco.retenu.arriveeDomicile);
+  });
+  it('limite du dîner après minuit (00:30) : s’entend la nuit suivante', () => {
+    const p = { ...P, limiteDinerDomicileMin: h('00:30') };
+    expect(evaluer(train('x', '16:15', '19:00', 30), p).repasCentimes).toBe(0);
+    expect(evaluer(train('x', '21:30', '00:20', 30), p).repasCentimes).toBe(1000);
+  });
+  it('propriété (oracle indépendant, minuit et égalités compris) : retenu ≤ min + tolérance et le plus tôt parmi les proches', () => {
     let graine = 42;
     const alea = () => ((graine = (graine * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
-    for (let n = 0; n < 500; n++) {
+    for (let n = 0; n < 1000; n++) {
       const trains = Array.from({ length: 2 + Math.floor(alea() * 5) }, (_, i) => {
-        const dep = 900 + Math.floor(alea() * 400);
-        return { id: `t${i}`, depart: dep, arrivee: dep + 170 + Math.floor(alea() * 30), prixCentimes: Math.floor(alea() * 12000) };
+        const dep = 900 + Math.floor(alea() * 600); // 15:00 à 00:59
+        const arr = (dep + 170 + Math.floor(alea() * 30)) % 1440; // peut passer minuit
+        const prix = [3000, 4000, 4200][Math.floor(alea() * 3)]! + (alea() < 0.5 ? 0 : Math.floor(alea() * 3000));
+        return { id: `t${i}`, depart: dep, arrivee: arr, prixCentimes: prix };
       });
+      // Oracle recalculé ici, sans passer par le classement du code testé.
+      const couts = trains.map((t) => {
+        const arrGare = t.arrivee < t.depart ? t.arrivee + 1440 : t.arrivee;
+        const dom = arrGare + P.trajetGareDomicileMin;
+        return { id: t.id, dom, cout: t.prixCentimes + (dom > P.limiteDinerDomicileMin ? P.coutRepasCentimes : 0) };
+      });
+      const min = Math.min(...couts.map((c) => c.cout));
+      const plusTot = Math.min(...couts.filter((c) => c.cout - min <= P.toleranceCentimes).map((c) => c.dom));
       const reco = recommander(trains, P)!;
-      const min = reco.classement[0]!.coutCompletCentimes;
       expect(reco.retenu.coutCompletCentimes - min).toBeLessThanOrEqual(P.toleranceCentimes);
-      for (const e of reco.classement) {
-        if (e.coutCompletCentimes - min <= P.toleranceCentimes) expect(reco.retenu.arriveeDomicile).toBeLessThanOrEqual(e.arriveeDomicile);
-      }
+      expect(reco.retenu.arriveeDomicile).toBe(plusTot);
     }
   });
 });

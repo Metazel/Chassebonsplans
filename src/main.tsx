@@ -5,7 +5,7 @@ import './ui/styles.css';
 const racine = document.getElementById('app');
 if (racine) render(<App />, racine);
 
-if (__PWA__ && 'serviceWorker' in navigator && location.protocol === 'https:') {
+if (__PWA__ && 'serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('./sw.js').catch(() => {
     /* Hors ligne indisponible : l'appli reste utilisable en ligne. */
   });
