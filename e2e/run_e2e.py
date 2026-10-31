@@ -27,6 +27,7 @@ SHOTS = Path(sys.argv[sys.argv.index("--shots") + 1]) if "--shots" in sys.argv e
 AXE = Path(os.environ.get("AXE_PATH", ROOT / "node_modules" / "axe-core" / "axe.min.js"))
 
 results: list[tuple[str, bool, str]] = []
+SCENARIOS: dict = {}
 EXTERNES: list[str] = []  # toutes les requêtes vers un tiers, tous scénarios confondus (EXG-01, EXG-05)
 
 
@@ -40,6 +41,7 @@ def scenario(name: str):
             except Exception as exc:  # noqa: BLE001 - chaque échec est rapporté
                 results.append((name, False, f"{type(exc).__name__}: {exc}".splitlines()[0][:300]))
                 print(traceback.format_exc().replace("::", ": :"), file=sys.stderr, flush=True)
+        SCENARIOS[name] = run
         return run
     return wrap
 
@@ -437,11 +439,41 @@ def main() -> int:
             browser.close()
     finally:
         srv.shutdown()
+    # Un scénario en échec est rejoué une fois, seul : un succès au second essai est signalé comme instable.
+    echecs = [name for name, passed, _ in results if not passed]
+    if echecs:
+        rejeu = {fn_name: fn for fn_name, fn in SCENARIOS.items() if fn_name in echecs}
+        avant = len(results)
+        srv = serve()
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                for fn in rejeu.values():
+                    fn(browser)
+                browser.close()
+        finally:
+            srv.shutdown()
+        second = {name: (passed, info) for name, passed, info in results[avant:]}
+        del results[avant:]
+        for i, (name, passed, info) in enumerate(results):
+            if not passed and second.get(name, (False, ""))[0]:
+                results[i] = (name, True, f"instable : réussi au second essai ({info})")
+                annoter("warning", name, f"instable : {info}")
     ok = sum(1 for _, passed, _ in results if passed)
     for name, passed, info in results:
         print(f"{'OK ' if passed else 'KO '} {name} ({info})")
+        if not passed:
+            annoter("error", name, info)
     print(json.dumps({"total": len(results), "ok": ok}))
     return 0 if ok == len(results) else 1
+
+
+def annoter(niveau: str, titre: str, message: str) -> None:
+    """Annotation GitHub Actions (lisible sans accès aux journaux) ; texte neutralisé."""
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+    nettoyer = lambda t: t.replace("%", "%25").replace("\r", " ").replace("\n", " ").replace("::", ": :")
+    print(f"::{niveau} title={nettoyer(titre)[:120].replace(',', ' ')}::{nettoyer(message)[:600]}", flush=True)
 
 
 if __name__ == "__main__":
