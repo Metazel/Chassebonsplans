@@ -13,7 +13,7 @@
   --texte-2: #4a4f5c;
   --accent: #0b5d50;
   --accent-texte: #ffffff;
-  --bord: #8a8f9a;
+  --bord: #6b7080;
   --erreur: #a3201c;
   --alerte-fond: #fff4d6;
   --alerte-texte: #5c3d00;
@@ -90,8 +90,9 @@ tr.retenu { background: var(--retenu); }
 
 details summary { cursor: pointer; list-style: none; display: flex; align-items: center; min-height: 44px; }
 details summary h2 { display: inline; margin: 0; }
-details summary::before { content: '▸'; margin-right: 0.5rem; }
-details[open] summary::before { content: '▾'; }
+details summary::before { content: '▸' / ''; margin-right: 0.5rem; }
+details[open] summary::before { content: '▾' / ''; }
+.avertissements { margin: 0.5rem 0; padding-left: 1.25rem; color: var(--alerte-texte); background: var(--alerte-fond); border-radius: 8px; padding: 0.5rem 0.75rem 0.5rem 1.75rem; }
 .alerte { background: var(--alerte-fond); color: var(--alerte-texte); padding: 0.5rem 0.75rem; border-radius: 8px; }
 
 footer { color: var(--texte-2); font-size: 0.95rem; padding-bottom: 2rem; margin-top: 2rem; }

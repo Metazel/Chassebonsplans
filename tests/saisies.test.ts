@@ -36,7 +36,7 @@ describe('référentiel versionné (EXG-10)', () => {
   });
   it('rejette un référentiel incomplet ou hors bornes', () => {
     expect(() => validerReferentiel(null)).toThrow();
-    expect(() => validerReferentiel({ trajetGareDomicileMin: 15, limiteDinerDomicile: '25:00', coutRepasEuros: 10, toleranceEuros: 2, meta: { source: 's', verifieLe: '2026-10-31' } })).toThrow();
+    expect(() => validerReferentiel({ version: '2026-10-31', trajetGareDomicileMin: 15, limiteDinerDomicile: '25:00', coutRepasEuros: 10, toleranceEuros: 2, meta: { source: 's', verifieLe: '2026-10-31' } })).toThrow();
     expect(() => validerReferentiel({ trajetGareDomicileMin: 999, limiteDinerDomicile: '21:45', coutRepasEuros: 10, toleranceEuros: 2, meta: { source: 's', verifieLe: '2026-10-31' } })).toThrow();
     expect(() => validerReferentiel({ trajetGareDomicileMin: 15, limiteDinerDomicile: '21:45', coutRepasEuros: 10, toleranceEuros: 2 })).toThrow();
   });

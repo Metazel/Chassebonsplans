@@ -1,47 +1,15 @@
-import { useMemo, useState } from 'preact/hooks';
-import { formaterHeure, lireHeure } from '../domain/heure';
-import { formaterMontant, lireMontant } from '../domain/argent';
-import { recommander, type Evaluation, type ParametresCout, type Recommandation, type TrainValide } from '../domain/coutComplet';
+import type { ComponentChildren } from 'preact';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { formaterHeure } from '../domain/heure';
+import { formaterMontant } from '../domain/argent';
+import { recommander, type Evaluation, type ParametresCout, type Recommandation } from '../domain/coutComplet';
 import { estAReverifier } from '../domain/referentiel';
+import { lireLigne, lireReglages, type LigneLue, type LigneTrain, type Reglages } from '../domain/saisie';
 import { REFERENTIEL_COUT } from '../data/parametres';
-
-interface LigneTrain {
-  id: string;
-  depart: string;
-  arrivee: string;
-  prix: string;
-}
-
-interface ErreursLigne {
-  depart?: string;
-  arrivee?: string;
-  prix?: string;
-}
 
 const MAX_TRAINS = 6;
 let compteur = 0;
 const nouvelleLigne = (): LigneTrain => ({ id: `t${++compteur}`, depart: '', arrivee: '', prix: '' });
-
-function lireLigne(l: LigneTrain): { train: TrainValide | null; erreurs: ErreursLigne } {
-  const erreurs: ErreursLigne = {};
-  const vide = !l.depart && !l.arrivee && !l.prix.trim();
-  if (vide) return { train: null, erreurs };
-  const depart = lireHeure(l.depart);
-  const arrivee = lireHeure(l.arrivee);
-  const prix = lireMontant(l.prix);
-  if (depart === null) erreurs.depart = 'Indiquez l’heure de départ, par exemple 19:00.';
-  if (arrivee === null) erreurs.arrivee = 'Indiquez l’heure d’arrivée en gare, par exemple 22:00.';
-  if (prix === null) erreurs.prix = 'Indiquez un prix entre 0 et 1 000 €, par exemple 29,90.';
-  if (depart === null || arrivee === null || prix === null) return { train: null, erreurs };
-  return { train: { id: l.id, depart, arrivee, prixCentimes: prix }, erreurs };
-}
-
-interface Reglages {
-  trajet: string;
-  limite: string;
-  repas: string;
-  tolerance: string;
-}
 
 const defauts = REFERENTIEL_COUT.parametres;
 const REGLAGES_DEFAUT: Reglages = {
@@ -50,27 +18,6 @@ const REGLAGES_DEFAUT: Reglages = {
   repas: String(defauts.coutRepasCentimes / 100).replace('.', ','),
   tolerance: String(defauts.toleranceCentimes / 100).replace('.', ','),
 };
-
-function lireReglages(r: Reglages): { parametres: ParametresCout; erreurs: Partial<Record<keyof Reglages, string>> } {
-  const erreurs: Partial<Record<keyof Reglages, string>> = {};
-  const trajet = /^\d{1,3}$/.test(r.trajet.trim()) ? Number(r.trajet) : NaN;
-  if (!(trajet >= 0 && trajet <= 180)) erreurs.trajet = 'Entre 0 et 180 minutes.';
-  const limite = lireHeure(r.limite);
-  if (limite === null) erreurs.limite = 'Une heure, par exemple 21:45.';
-  const repas = lireMontant(r.repas, 100);
-  if (repas === null) erreurs.repas = 'Entre 0 et 100 €.';
-  const tolerance = lireMontant(r.tolerance, 50);
-  if (tolerance === null) erreurs.tolerance = 'Entre 0 et 50 €.';
-  return {
-    parametres: {
-      trajetGareDomicileMin: Number.isNaN(trajet) || erreurs.trajet ? defauts.trajetGareDomicileMin : trajet,
-      limiteDinerDomicileMin: limite ?? defauts.limiteDinerDomicileMin,
-      coutRepasCentimes: repas ?? defauts.coutRepasCentimes,
-      toleranceCentimes: tolerance ?? defauts.toleranceCentimes,
-    },
-    erreurs,
-  };
-}
 
 function Champ(props: {
   id: string;
@@ -82,14 +29,18 @@ function Champ(props: {
   inputMode?: 'decimal' | 'numeric';
   onInput: (v: string) => void;
 }) {
-  const decrit = [props.aide ? `${props.id}-aide` : '', props.erreur ? `${props.id}-err` : ''].filter(Boolean).join(' ');
+  // Une erreur ne s'affiche qu'une fois le champ quitté (pas pendant la première saisie).
+  const [visite, setVisite] = useState(false);
+  const erreur = visite ? props.erreur : undefined;
+  const decrit = [props.aide ? `${props.id}-aide` : '', erreur ? `${props.id}-err` : ''].filter(Boolean).join(' ');
   const commun = {
     id: props.id,
     value: props.valeur,
     autoComplete: 'off',
-    'aria-invalid': props.erreur ? ('true' as const) : undefined,
+    'aria-invalid': erreur ? ('true' as const) : undefined,
     'aria-describedby': decrit || undefined,
     onInput: (e: Event) => props.onInput((e.currentTarget as HTMLInputElement).value),
+    onBlur: () => setVisite(true),
   };
   return (
     <div class="champ">
@@ -99,14 +50,10 @@ function Champ(props: {
           {props.aide}
         </span>
       )}
-      {props.type === 'time' ? (
-        <input type="time" {...commun} />
-      ) : (
-        <input type="text" inputMode={props.inputMode} {...commun} />
-      )}
-      {props.erreur && (
+      {props.type === 'time' ? <input type="time" {...commun} /> : <input type="text" inputMode={props.inputMode} {...commun} />}
+      {erreur && (
         <span class="erreur" id={`${props.id}-err`}>
-          {props.erreur}
+          {erreur}
         </span>
       )}
     </div>
@@ -115,72 +62,116 @@ function Champ(props: {
 
 function nomTrain(e: Evaluation, lignes: LigneTrain[]): string {
   const rang = lignes.findIndex((l) => l.id === e.id) + 1;
-  return `Train ${rang} (${formaterHeure(e.depart)})`;
+  return `train ${rang} (${formaterHeure(e.depart)})`;
 }
 
-function Resultat({ reco, lignes, parametres }: { reco: Recommandation | null; lignes: LigneTrain[]; parametres: ParametresCout }) {
-  if (!reco || reco.classement.length < 2) {
-    return <p>Saisissez au moins deux trains complets pour obtenir une recommandation.</p>;
+function Explication({ reco, lignes, parametres }: { reco: Recommandation; lignes: LigneTrain[]; parametres: ParametresCout }) {
+  const { retenu, motif, concurrent } = reco;
+  if (motif === 'moins-cher') return <>C’est le coût complet le plus bas : {formaterMontant(retenu.coutCompletCentimes)}.</>;
+  if (motif !== 'egalite-plus-tot' || !concurrent) return null;
+  if (concurrent.arriveeDomicile === retenu.arriveeDomicile) {
+    return (
+      <>
+        Il fait jeu égal avec le {nomTrain(concurrent, lignes)} : même coût complet à {formaterMontant(parametres.toleranceCentimes)} près et même heure
+        d’arrivée chez vous.
+      </>
+    );
   }
-  const { retenu, classement, motif, concurrent } = reco;
   return (
     <>
-      <p class="reco">
-        Prenez le <strong>{nomTrain(retenu, lignes)}</strong> : arrivée en gare à {formaterHeure(retenu.arriveeGare)}, chez vous vers{' '}
-        {formaterHeure(retenu.arriveeDomicile)}.
-      </p>
-      <p>
-        {motif === 'moins-cher' && <>C’est le coût complet le plus bas : {formaterMontant(retenu.coutCompletCentimes)}.</>}
-        {motif === 'egalite-plus-tot' && concurrent && (
-          <>
-            Son coût complet ({formaterMontant(retenu.coutCompletCentimes)}) égale celui du {nomTrain(concurrent, lignes)} (
-            {formaterMontant(concurrent.coutCompletCentimes)}) à {formaterMontant(parametres.toleranceCentimes)} près, et vous êtes chez vous à{' '}
-            {formaterHeure(retenu.arriveeDomicile)} au lieu de {formaterHeure(concurrent.arriveeDomicile)}.
-          </>
-        )}
-      </p>
-      <table>
-        <caption>Détail du coût complet, du moins cher au plus cher</caption>
-        <thead>
-          <tr>
-            <th scope="col">Train</th>
-            <th scope="col">Billet</th>
-            <th scope="col">Repas à bord</th>
-            <th scope="col">Coût complet</th>
-            <th scope="col">Chez vous</th>
-          </tr>
-        </thead>
-        <tbody>
-          {classement.map((e) => (
-            <tr key={e.id} class={e === retenu ? 'retenu' : undefined}>
-              <th scope="row">
-                {nomTrain(e, lignes)}
-                {e === retenu && <span class="badge"> recommandé</span>}
-              </th>
-              <td data-label="Billet : ">{formaterMontant(e.prixCentimes)}</td>
-              <td data-label="Repas à bord : ">{e.repasCentimes ? formaterMontant(e.repasCentimes) : 'aucun'}</td>
-              <td data-label="Coût complet : ">{formaterMontant(e.coutCompletCentimes)}</td>
-              <td data-label="Chez vous : ">{formaterHeure(e.arriveeDomicile)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      Le {nomTrain(concurrent, lignes)} coûte {formaterMontant(concurrent.coutCompletCentimes)} au total, soit au plus{' '}
+      {formaterMontant(parametres.toleranceCentimes)} de moins, mais vous ramène à {formaterHeure(concurrent.arriveeDomicile)} au lieu de{' '}
+      {formaterHeure(retenu.arriveeDomicile)}.
     </>
+  );
+}
+
+function Detail({ reco, lignes }: { reco: Recommandation; lignes: LigneTrain[] }) {
+  return (
+    <table>
+      <caption>Détail du coût complet, du moins cher au plus cher</caption>
+      <thead>
+        <tr>
+          <th scope="col">Train</th>
+          <th scope="col">Billet</th>
+          <th scope="col">Repas à bord</th>
+          <th scope="col">Coût complet</th>
+          <th scope="col">Chez vous</th>
+        </tr>
+      </thead>
+      <tbody>
+        {reco.classement.map((e) => (
+          <tr key={e.id} class={e === reco.retenu ? 'retenu' : undefined}>
+            <th scope="row">
+              {nomTrain(e, lignes).replace(/^t/, 'T')}
+              {e === reco.retenu && <span class="badge"> recommandé</span>}
+            </th>
+            <td data-label="Billet : ">{formaterMontant(e.prixCentimes)}</td>
+            <td data-label="Repas à bord : ">{e.repasCentimes ? formaterMontant(e.repasCentimes) : 'aucun'}</td>
+            <td data-label="Coût complet : ">{formaterMontant(e.coutCompletCentimes)}</td>
+            <td data-label="Chez vous : ">{formaterHeure(e.arriveeDomicile)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function Avertissements({ lues }: { lues: LigneLue[] }) {
+  const ecartees = lues.map((l, i) => ({ etat: l.etat, rang: i + 1 })).filter((l) => l.etat === 'incomplet' || l.etat === 'invalide');
+  if (!ecartees.length) return null;
+  return (
+    <ul class="avertissements">
+      {ecartees.map((l) => (
+        <li key={l.rang}>
+          Train {l.rang} {l.etat === 'incomplet' ? 'incomplet' : 'à corriger'} : il n’est pas pris en compte.
+        </li>
+      ))}
+    </ul>
   );
 }
 
 export function App() {
   const [lignes, setLignes] = useState<LigneTrain[]>(() => [nouvelleLigne(), nouvelleLigne()]);
   const [reglages, setReglages] = useState<Reglages>(REGLAGES_DEFAUT);
+  const focusApres = useRef<string | null>(null);
 
-  const lues = useMemo(() => lignes.map(lireLigne), [lignes]);
-  const { parametres, erreurs: erreursReglages } = useMemo(() => lireReglages(reglages), [reglages]);
-  const trains = lues.map((l) => l.train).filter((t): t is TrainValide => t !== null);
-  const reco = useMemo(() => recommander(trains, parametres), [trains.map((t) => `${t.id}${t.depart}${t.arrivee}${t.prixCentimes}`).join('|'), parametres]);
+  // Gestion du focus après ajout ou retrait d'un train (RGAA 12.8).
+  useEffect(() => {
+    if (focusApres.current) {
+      document.getElementById(focusApres.current)?.focus();
+      focusApres.current = null;
+    }
+  }, [lignes]);
+
+  const lues = lignes.map(lireLigne);
+  const { parametres, erreurs: erreursReglages } = lireReglages(reglages);
+  const trains = lues.flatMap((l) => (l.train ? [l.train] : []));
+  const reco = parametres ? recommander(trains, parametres) : null;
   const aReverifier = estAReverifier(REFERENTIEL_COUT.meta.verifieLe, new Date());
 
   const maj = (id: string, champ: keyof Omit<LigneTrain, 'id'>, v: string) =>
     setLignes((ls) => ls.map((l) => (l.id === id ? { ...l, [champ]: v } : l)));
+  const ajouter = () => {
+    const l = nouvelleLigne();
+    focusApres.current = `${l.id}-dep`;
+    setLignes((ls) => [...ls, l]);
+  };
+  const retirer = (id: string) => {
+    focusApres.current = 'ajouter-train';
+    setLignes((ls) => ls.filter((x) => x.id !== id));
+  };
+
+  let phrase: ComponentChildren;
+  if (!parametres) phrase = 'Corrigez les réglages du coût complet pour obtenir une recommandation.';
+  else if (!reco || reco.classement.length < 2) phrase = 'Saisissez au moins deux trains complets pour obtenir une recommandation.';
+  else
+    phrase = (
+      <>
+        Prenez le <strong>{nomTrain(reco.retenu, lignes)}</strong> : arrivée en gare à {formaterHeure(reco.retenu.arriveeGare)}, chez vous vers{' '}
+        {formaterHeure(reco.retenu.arriveeDomicile)}.
+      </>
+    );
 
   return (
     <>
@@ -194,11 +185,12 @@ export function App() {
         <h1>Mon train retour au coût complet</h1>
         <p class="intro">
           Le coût complet ajoute au billet ce que les horaires vous font dépenser : un repas à bord si vous arrivez chez vous après{' '}
-          {formaterHeure(parametres.limiteDinerDomicileMin)}. À coût égal, le train qui vous ramène le plus tôt l’emporte.
+          {formaterHeure((parametres ?? defauts).limiteDinerDomicileMin)}. À coût égal, le train qui vous ramène le plus tôt l’emporte.
         </p>
 
         <section aria-labelledby="titre-trains">
           <h2 id="titre-trains">Trains comparés</h2>
+          <p class="aide">Pour chaque train, les trois champs sont obligatoires. Prix en euros, par exemple 29,90.</p>
           {lignes.map((l, i) => (
             <fieldset key={l.id} class="train">
               <legend>Train {i + 1}</legend>
@@ -208,24 +200,37 @@ export function App() {
                 <Champ id={`${l.id}-prix`} libelle="Prix du billet (€)" inputMode="decimal" valeur={l.prix} erreur={lues[i]?.erreurs.prix} onInput={(v) => maj(l.id, 'prix', v)} />
               </div>
               {lignes.length > 2 && (
-                <button type="button" class="secondaire" onClick={() => setLignes((ls) => ls.filter((x) => x.id !== l.id))}>
+                <button type="button" class="secondaire" onClick={() => retirer(l.id)}>
                   Retirer le train {i + 1}
                 </button>
               )}
             </fieldset>
           ))}
-          {lignes.length < MAX_TRAINS && (
-            <button type="button" onClick={() => setLignes((ls) => [...ls, nouvelleLigne()])}>
+          {lignes.length < MAX_TRAINS ? (
+            <button type="button" id="ajouter-train" onClick={ajouter}>
               Ajouter un train
             </button>
+          ) : (
+            <p class="aide" id="ajouter-train" tabIndex={-1}>
+              Six trains au plus.
+            </p>
           )}
         </section>
 
         <section aria-labelledby="titre-reco" class="resultat">
           <h2 id="titre-reco">Recommandation</h2>
-          <div aria-live="polite">
-            <Resultat reco={reco} lignes={lignes} parametres={parametres} />
-          </div>
+          <p class="reco" aria-live="polite" aria-atomic="true">
+            {phrase}
+          </p>
+          <Avertissements lues={lues} />
+          {parametres && reco && reco.classement.length >= 2 && (
+            <>
+              <p>
+                <Explication reco={reco} lignes={lignes} parametres={parametres} />
+              </p>
+              <Detail reco={reco} lignes={lignes} />
+            </>
+          )}
         </section>
 
         <section aria-labelledby="titre-reglages">
@@ -239,9 +244,9 @@ export function App() {
               <Champ id="r-repas" libelle="Prix d’un repas à bord (€)" inputMode="decimal" valeur={reglages.repas} erreur={erreursReglages.repas} onInput={(v) => setReglages((r) => ({ ...r, repas: v }))} />
               <Champ
                 id="r-tolerance"
-                libelle="Égalité à … € près"
+                libelle="Écart toléré (€)"
                 inputMode="decimal"
-                aide="En dessous de cet écart, le train le plus tôt l’emporte."
+                aide="Jusqu’à cet écart compris, le train qui ramène le plus tôt l’emporte."
                 valeur={reglages.tolerance}
                 erreur={erreursReglages.tolerance}
                 onInput={(v) => setReglages((r) => ({ ...r, tolerance: v }))}

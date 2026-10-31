@@ -27,6 +27,7 @@ SHOTS = Path(sys.argv[sys.argv.index("--shots") + 1]) if "--shots" in sys.argv e
 AXE = Path(os.environ.get("AXE_PATH", ROOT / "node_modules" / "axe-core" / "axe.min.js"))
 
 results: list[tuple[str, bool, str]] = []
+EXTERNES: list[str] = []  # toutes les requêtes vers un tiers, tous scénarios confondus (EXG-01, EXG-05)
 
 
 def scenario(name: str):
@@ -59,6 +60,7 @@ def new_page(browser: Browser, **extra) -> tuple[Page, list[str], list[str]]:
             r.continue_()
         else:  # EXG-01 / EXG-05 : aucune requête vers un tiers
             external.append(r.request.url)
+            EXTERNES.append(r.request.url)
             r.abort()
 
     ctx.route("**/*", route)
@@ -89,8 +91,8 @@ def sandwich(browser: Browser) -> None:
     saisir_train(page, 1, "19:00", "22:00", "30")
     saisir_train(page, 2, "17:45", "20:45", "40")
     reco = page.locator(".reco")
-    expect(reco).to_contain_text("Train 2 (17:45)")
-    expect(page.locator(".resultat")).to_contain_text("chez vous à 21:00 au lieu de 22:15")
+    expect(reco).to_contain_text("train 2 (17:45)")
+    expect(page.locator(".resultat")).to_contain_text("vous ramène à 22:15 au lieu de 21:00")
     ligne = page.locator("tr.retenu")
     expect(ligne).to_contain_text("aucun")
     shot(page, "sandwich")
@@ -103,7 +105,7 @@ def moins_cher(browser: Browser) -> None:
     page, errors, _ = new_page(browser)
     saisir_train(page, 1, "19:00", "22:00", "30")
     saisir_train(page, 2, "17:45", "20:45", "45")
-    expect(page.locator(".reco")).to_contain_text("Train 1 (19:00)")
+    expect(page.locator(".reco")).to_contain_text("train 1 (19:00)")
     expect(page.locator(".resultat")).to_contain_text("coût complet le plus bas")
     assert not errors, errors
 
@@ -113,10 +115,36 @@ def saisie_invalide(browser: Browser) -> None:
     page, errors, _ = new_page(browser)
     saisir_train(page, 1, "19:00", "22:00", "trente")
     champ = page.get_by_role("group", name="Train 1").get_by_label("Prix du billet (€)")
+    page.keyboard.press("Tab")  # l'erreur s'affiche à la sortie du champ
     expect(champ).to_have_attribute("aria-invalid", "true")
     described = champ.get_attribute("aria-describedby") or ""
-    expect(page.locator(f"#{described.split()[-1]}")).to_contain_text("Indiquez un prix")
+    expect(page.locator(f"#{described.split()[-1]}")).to_contain_text("Prix invalide")
     expect(page.locator(".resultat")).to_contain_text("Saisissez au moins deux trains")
+    expect(page.locator(".avertissements")).to_contain_text("Train 1 à corriger")
+    assert not errors, errors
+
+
+@scenario("Train incomplet : signalé et exclu, pas de recommandation trompeuse")
+def train_incomplet(browser: Browser) -> None:
+    page, errors, _ = new_page(browser)
+    saisir_train(page, 1, "19:00", "22:00", "30")
+    saisir_train(page, 2, "17:45", "20:45", "40")
+    page.get_by_role("button", name="Ajouter un train").click()
+    page.get_by_role("group", name="Train 3").get_by_label("Prix du billet (€)").fill("5")
+    expect(page.locator(".avertissements")).to_contain_text("Train 3 incomplet")
+    expect(page.locator(".reco")).to_contain_text("train 2 (17:45)")
+    assert not errors, errors
+
+
+@scenario("Réglage invalide : calcul suspendu, pas de valeur par défaut cachée")
+def reglage_invalide(browser: Browser) -> None:
+    page, errors, _ = new_page(browser)
+    saisir_train(page, 1, "19:00", "22:00", "30")
+    saisir_train(page, 2, "17:45", "20:45", "40")
+    page.get_by_text("Réglages du coût complet").click()
+    page.get_by_label("Écart toléré (€)").fill("abc")
+    expect(page.locator(".reco")).to_contain_text("Corrigez les réglages")
+    expect(page.locator("table")).to_have_count(0)
     assert not errors, errors
 
 
@@ -127,17 +155,23 @@ def reglages(browser: Browser) -> None:
     saisir_train(page, 2, "17:45", "20:45", "40")
     page.get_by_text("Réglages du coût complet").click()
     page.get_by_label("Dîner à la maison jusqu’à").fill("23:00")
-    expect(page.locator(".reco")).to_contain_text("Train 1 (19:00)")
+    expect(page.locator(".reco")).to_contain_text("train 1 (19:00)")
     assert not errors, errors
 
 
-@scenario("Ajouter puis retirer un train")
+@scenario("Ajouter puis retirer un train : le focus suit (RGAA 12.8)")
 def ajout_retrait(browser: Browser) -> None:
     page, errors, _ = new_page(browser)
     page.get_by_role("button", name="Ajouter un train").click()
     expect(page.get_by_role("group", name="Train 3")).to_be_visible()
+    expect(page.get_by_role("group", name="Train 3").get_by_label("Départ")).to_be_focused()
     page.get_by_role("button", name="Retirer le train 3").click()
     expect(page.get_by_role("group", name="Train 3")).to_have_count(0)
+    expect(page.get_by_role("button", name="Ajouter un train")).to_be_focused()
+    for _ in range(4):
+        page.get_by_role("button", name="Ajouter un train").click()
+    expect(page.get_by_role("group", name="Train 6").get_by_label("Départ")).to_be_focused()
+    expect(page.get_by_role("button", name="Ajouter un train")).to_have_count(0)
     assert not errors, errors
 
 
@@ -180,6 +214,34 @@ def clavier(browser: Browser) -> None:
     assert not errors, errors
 
 
+@scenario("Sécurité — la PWA publiée porte la CSP stricte")
+def csp(_browser: Browser) -> None:
+    html = (ROOT / "dist" / "index.html").read_text(encoding="utf-8")
+    assert 'http-equiv="Content-Security-Policy"' in html, "CSP absente"
+    for directive in ("script-src 'self'", "connect-src 'self'", "object-src 'none'", "base-uri 'none'"):
+        assert directive in html, directive
+    assert "unsafe-inline" not in html
+
+
+@scenario("Hors ligne — après une première visite, l'appli s'ouvre sans réseau")
+def hors_ligne(browser: Browser) -> None:
+    ctx = browser.new_context(**PHONE)
+    page = ctx.new_page()
+    page.goto(URL)
+    page.evaluate("navigator.serviceWorker.ready.then(() => true)")
+    page.reload()
+    assert page.evaluate("navigator.serviceWorker.controller !== null"), "service worker inactif"
+    ctx.set_offline(True)
+    page.reload()
+    expect(page.get_by_role("heading", level=1)).to_contain_text("coût complet")
+    ctx.close()
+
+
+@scenario("Vie privée — aucune requête vers un tiers sur l'ensemble de la recette")
+def aucune_requete_tierce(_browser: Browser) -> None:
+    assert not EXTERNES, EXTERNES
+
+
 def serve() -> ThreadingHTTPServer:
     class Silencieux(SimpleHTTPRequestHandler):
         def log_message(self, *_args) -> None:  # noqa: D401 - journal muet
@@ -199,7 +261,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (sandwich, moins_cher, saisie_invalide, reglages, ajout_retrait, accessibilite, reflow, clavier):
+            for fn in (sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:

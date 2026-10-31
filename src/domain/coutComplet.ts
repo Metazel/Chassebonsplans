@@ -3,15 +3,20 @@
  *
  * Coût complet = prix du billet + coûts induits par les horaires.
  * Coût induit du lot 1 : un repas à bord si l'arrivée au domicile dépasse l'heure limite du dîner.
- * Choix : le coût complet le plus bas ; à coût égal (à la tolérance près), le train qui ramène
- * le plus tôt à la maison.
+ * Choix : le coût complet le plus bas ; si d'autres trains sont à la tolérance près (écart
+ * inférieur ou égal, bornes comprises), celui qui ramène le plus tôt à la maison.
  */
-import { arriveeApresDepart } from './heure';
+import { MINUTES_PAR_JOUR, arriveeApresDepart } from './heure';
+
+const MIDI = 12 * 60;
 
 export interface ParametresCout {
   /** Durée gare → domicile, en minutes. */
   trajetGareDomicileMin: number;
-  /** Heure d'arrivée au domicile au-delà de laquelle on dîne à bord (minutes depuis minuit). */
+  /**
+   * Heure d'arrivée au domicile au-delà de laquelle on dîne à bord (minutes depuis minuit).
+   * Une limite avant midi (ex. 00:30) s'entend la nuit suivante.
+   */
   limiteDinerDomicileMin: number;
   /** Prix d'un repas à bord, en centimes. */
   coutRepasCentimes: number;
@@ -52,8 +57,9 @@ export interface Recommandation {
 export function evaluer(train: TrainValide, p: ParametresCout): Evaluation {
   const arriveeGare = arriveeApresDepart(train.depart, train.arrivee);
   const arriveeDomicile = arriveeGare + p.trajetGareDomicileMin;
-  // Échelle continue : une arrivée après minuit dépasse forcément la limite du dîner.
-  const repasCentimes = arriveeDomicile > p.limiteDinerDomicileMin ? p.coutRepasCentimes : 0;
+  // Échelle continue depuis le minuit du départ : une limite avant midi tombe la nuit suivante.
+  const limite = p.limiteDinerDomicileMin < MIDI ? p.limiteDinerDomicileMin + MINUTES_PAR_JOUR : p.limiteDinerDomicileMin;
+  const repasCentimes = arriveeDomicile > limite ? p.coutRepasCentimes : 0;
   return {
     id: train.id,
     depart: train.depart,
