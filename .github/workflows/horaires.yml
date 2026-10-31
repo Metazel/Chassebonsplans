@@ -28,7 +28,10 @@ jobs:
       - run: python -m unittest scripts/test_extraire_horaires.py
       - id: extraction
         run: |
-          python scripts/extraire_horaires.py --sortie horaires.json > resume.json
+          if ! python scripts/extraire_horaires.py --sortie horaires.json > resume.json 2> erreur.txt; then
+            echo "::error title=Extraction::$(tail -c 900 erreur.txt | tr '\n' ' ' | sed 's/::/: :/g')"
+            exit 1
+          fi
           echo "::notice title=Extraction horaires::$(cat resume.json)"
           python - <<'PY'
           import json
