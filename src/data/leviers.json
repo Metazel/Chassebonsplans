@@ -1,0 +1,109 @@
+{
+  "version": "2026-10-31",
+  "leviers": [
+    {
+      "id": "carte-avantage-adulte",
+      "nom": "Carte Avantage Adulte (27-59 ans)",
+      "categorie": "train",
+      "prix": "49 € par an",
+      "effet": "30 % de réduction et prix plafonnés en 2de classe sur TGV INOUI et Intercités.",
+      "conditions": [
+        "Aller-retour avec au moins une nuit de vendredi, samedi ou dimanche sur place, aller simple le samedi ou le dimanche, ou voyage avec un enfant.",
+        "61 jours au plus entre l'aller et le retour.",
+        "Prix plafonnés sur trajets directs en 2de classe : 49 € (moins de 1 h 30), 69 € (1 h 30 à 3 h), 89 € (plus de 3 h). La SNCF indique que ces plafonds « restent en vigueur pour le moment » : règle susceptible de changer.",
+        "60 % de réduction pour 3 enfants de 4 à 11 ans au plus, billets achetés en même temps que celui du titulaire.",
+        "Pas valable sur OUIGO."
+      ],
+      "validiteAnnuelle": true,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/carte-avantage/carte-avantage-adulte/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "carte-liberte",
+      "nom": "Carte Liberté",
+      "categorie": "train",
+      "prix": "349 € par an (299 € avec un Contrat Pro)",
+      "effet": "Tarif Liberté pour les voyages professionnels : -60 % en 2de et -45 % en 1re, calculés sur le tarif Flex Première ; tarif Avantage (-30 %) pour les voyages personnels.",
+      "conditions": [
+        "Tarif Liberté : échange et remboursement sans frais jusqu'à 30 minutes après le départ.",
+        "Tarif Avantage : échange et remboursement gratuits jusqu'à J-7, puis retenue (19 € par trajet sur TGV INOUI).",
+        "Dès 12 ans ; vérifier les tarifs en vigueur avant l'achat."
+      ],
+      "validiteAnnuelle": true,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/carte-liberte/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "max-actif",
+      "nom": "Abonnement MAX ACTIF / MAX ACTIF+",
+      "categorie": "train",
+      "prix": "Selon le trajet, 12 mensualités",
+      "effet": "Réservations à 0 € sur TGV et TGV INOUI : 250 (du lundi au jeudi) avec MAX ACTIF, 450 (7 jours sur 7) avec MAX ACTIF+ ; 2 trajets par jour au plus, espacés d'au moins 2 heures.",
+      "conditions": [
+        "Réservé à une liste fermée de trajets fixée par SNCF Voyageurs : vérifier que Marseille - Paris en fait partie.",
+        "Échange gratuit jusqu'à 30 minutes après le départ, pour le même jour et le même trajet seulement.",
+        "Annulation possible jusqu'à 30 minutes après le départ si aucun échange n'a été fait.",
+        "Engagement de 12 mois, reconduction tacite ; une mensualité supplémentaire en cas de résiliation anticipée.",
+        "OUIGO, trains de nuit et Transilien exclus."
+      ],
+      "validiteAnnuelle": true,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "carte-voyageur-sncf",
+      "nom": "Carte de fidélité SNCF (Voyageur / Grand Voyageur)",
+      "categorie": "train",
+      "prix": "Sans frais",
+      "effet": "Programme de fidélité : cumul de points et avantages partenaires. Ce n'est pas une carte de réduction : ni remise de 30 %, ni prix plafonnés.",
+      "conditions": [
+        "Le programme Grand Voyageur est sur invitation (selon les dépenses et la détention d'une carte de réduction en cours).",
+        "Les points s'échangent contre des primes (billets, cartes de réduction, services)."
+      ],
+      "validiteAnnuelle": false,
+      "source": "https://www.sncf-connect.com/aide/le-programme-de-fidelite-grand-voyageur",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "visa-premier",
+      "nom": "Carte bancaire Visa Premier",
+      "categorie": "assurance",
+      "prix": "Selon la banque",
+      "effet": "Assurance annulation et interruption de voyage incluse, avec un plafond annuel par assuré fixé par la notice de votre banque (souvent 5 000 €).",
+      "conditions": [
+        "Le voyage doit être payé avec la carte, en totalité ou en partie selon la notice de la banque.",
+        "Bénéficiaires (conjoint, enfants à charge…) et motifs couverts définis par la notice de votre banque : la lire avant de compter dessus.",
+        "Une simple incertitude sur le programme n'est en général pas un motif couvert."
+      ],
+      "validiteAnnuelle": false,
+      "source": "https://hellosafe.fr/assurance-voyage/assurance-carte/annulation",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "pass-ulys",
+      "nom": "Pass Ulys (télépéage)",
+      "categorie": "route",
+      "prix": "Selon la formule",
+      "effet": "Accès à plus de 1 000 parkings partenaires (gares, aéroports) et au Club Ulys : réductions chez 250 marques, dont location de voiture et hébergement.",
+      "conditions": [
+        "Offres du Club Ulys variables, à consulter dans l'espace client Ulys."
+      ],
+      "validiteAnnuelle": false,
+      "source": "https://ulys.com/friends-family",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "carte-fnac-plus",
+      "nom": "Carte Fnac+",
+      "categorie": "partenaires",
+      "prix": "Selon l'offre en cours",
+      "effet": "Spectacles et événements à prix réduit ; offres partenaires, dont certaines pour les voyages.",
+      "conditions": [
+        "Offres partenaires variables, à consulter dans l'espace client Fnac."
+      ],
+      "validiteAnnuelle": false,
+      "source": "https://milesopedia.fr/programme-fidelite/carte-fnac/",
+      "verifieLe": "2026-10-31"
+    }
+  ]
+}
