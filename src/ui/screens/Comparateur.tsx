@@ -7,6 +7,7 @@ import { estAReverifier } from '../../domain/referentiel';
 import { lireLigne, lireReglages, type LigneLue, type LigneTrain, type Reglages } from '../../domain/saisie';
 import { REFERENTIEL_COUT } from '../../data/parametres';
 import { Champ } from '../components/Champ';
+import { LONGUEUR_REGLAGE } from '../../domain/profil';
 
 export const MAX_TRAINS = 6;
 let compteur = 0;
@@ -200,11 +201,12 @@ export function Comparateur(props: {
             <h2 id="titre-reglages">Réglages du coût complet</h2>
           </summary>
           <div class="ligne">
-            <Champ id="r-trajet" libelle="Trajet gare → domicile (min)" inputMode="numeric" valeur={reglages.trajet} erreur={erreursReglages.trajet} onInput={(v) => setReglages((r) => ({ ...r, trajet: v }))} />
+            <Champ id="r-trajet" maxLength={LONGUEUR_REGLAGE} libelle="Trajet gare → domicile (min)" inputMode="numeric" valeur={reglages.trajet} erreur={erreursReglages.trajet} onInput={(v) => setReglages((r) => ({ ...r, trajet: v }))} />
             <Champ id="r-limite" libelle="Dîner à la maison jusqu’à" type="time" valeur={reglages.limite} erreur={erreursReglages.limite} onInput={(v) => setReglages((r) => ({ ...r, limite: v }))} />
-            <Champ id="r-repas" libelle="Prix d’un repas à bord (€)" inputMode="decimal" valeur={reglages.repas} erreur={erreursReglages.repas} onInput={(v) => setReglages((r) => ({ ...r, repas: v }))} />
+            <Champ id="r-repas" maxLength={LONGUEUR_REGLAGE} libelle="Prix d’un repas à bord (€)" inputMode="decimal" valeur={reglages.repas} erreur={erreursReglages.repas} onInput={(v) => setReglages((r) => ({ ...r, repas: v }))} />
             <Champ
               id="r-tolerance"
+              maxLength={LONGUEUR_REGLAGE}
               libelle="Écart toléré (€)"
               inputMode="decimal"
               aide="Jusqu’à cet écart compris, le train qui ramène le plus tôt l’emporte."

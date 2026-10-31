@@ -35,36 +35,81 @@ export function estDateIso(v: unknown): v is string {
   return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
 }
 
-function champReglage(v: unknown): string {
-  if (typeof v !== 'string' || v.length > 10 || contientNumeroCarte(v)) throw new Error('Réglages invalides');
-  return v;
+/** Longueur maximale d'un champ de réglage (assez court pour qu'aucun numéro de carte n'y tienne). */
+export const LONGUEUR_REGLAGE = 10;
+
+/** Un réglage est stockable s'il est court et ne contient pas de numéro de carte (EXG-02). */
+export function reglageStockable(v: unknown): v is string {
+  return typeof v === 'string' && v.length <= LONGUEUR_REGLAGE && !contientNumeroCarte(v);
 }
 
-/** Valide un profil relu. Les leviers inconnus du catalogue sont ignorés (catalogue qui évolue). */
-export function validerProfil(src: unknown, idsConnus: ReadonlySet<string>): Profil {
-  if (typeof src !== 'object' || src === null) throw new Error('Profil invalide');
+export function reglagesStockables(g: unknown): g is Reglages {
+  const r = g as Record<string, unknown> | null;
+  return !!r && reglageStockable(r.trajet) && reglageStockable(r.limite) && reglageStockable(r.repas) && reglageStockable(r.tolerance);
+}
+
+export interface Lecture {
+  profil: Profil;
+  /** Parties écartées à la relecture (le reste du profil est conservé). */
+  ecartes: string[];
+}
+
+/**
+ * Valide un profil relu, champ par champ : une partie invalide est écartée et signalée,
+ * sans faire perdre le reste. Seul un profil inexploitable (pas un objet, version inconnue) est refusé.
+ * Les leviers inconnus du catalogue sont ignorés (catalogue qui évolue) ; les leviers non détenus ne sont pas gardés.
+ */
+export function lireProfil(src: unknown, idsConnus: ReadonlySet<string>): Lecture {
+  if (typeof src !== 'object' || src === null || Array.isArray(src)) throw new Error('Profil invalide');
   const r = src as Record<string, unknown>;
   if (r.version !== VERSION_PROFIL) throw new Error('Version de profil non prise en charge');
-  if (typeof r.leviers !== 'object' || r.leviers === null || Array.isArray(r.leviers)) throw new Error('Profil invalide : leviers');
+  const ecartes: string[] = [];
   const leviers: Record<string, EtatLevier> = {};
-  for (const [id, etat] of Object.entries(r.leviers as Record<string, unknown>)) {
-    if (!idsConnus.has(id)) continue;
+  const brutLeviers = typeof r.leviers === 'object' && r.leviers !== null && !Array.isArray(r.leviers) ? (r.leviers as Record<string, unknown>) : null;
+  if (!brutLeviers) ecartes.push('leviers');
+  for (const [id, etat] of Object.entries(brutLeviers ?? {})) {
+    if (!idsConnus.has(id)) {
+      ecartes.push(`levier inconnu ${id.slice(0, 40)}`);
+      continue;
+    }
     const e = etat as Record<string, unknown> | null;
-    if (!e || typeof e.detenu !== 'boolean') throw new Error(`Profil invalide : levier ${id}`);
-    if (e.finValidite !== undefined && !estDateIso(e.finValidite)) throw new Error(`Profil invalide : fin de validité de ${id}`);
-    leviers[id] = e.finValidite !== undefined ? { detenu: e.detenu, finValidite: e.finValidite } : { detenu: e.detenu };
+    if (!e || typeof e.detenu !== 'boolean' || (e.finValidite !== undefined && !estDateIso(e.finValidite))) {
+      ecartes.push(`levier ${id}`);
+      continue;
+    }
+    if (!e.detenu) continue;
+    leviers[id] = e.finValidite !== undefined ? { detenu: true, finValidite: e.finValidite as string } : { detenu: true };
   }
   const profil: Profil = { version: VERSION_PROFIL, leviers };
   if (r.reglages !== undefined) {
-    const g = r.reglages as Record<string, unknown> | null;
-    if (!g) throw new Error('Réglages invalides');
-    profil.reglages = { trajet: champReglage(g.trajet), limite: champReglage(g.limite), repas: champReglage(g.repas), tolerance: champReglage(g.tolerance) };
+    if (reglagesStockables(r.reglages)) {
+      const g = r.reglages;
+      profil.reglages = { trajet: g.trajet, limite: g.limite, repas: g.repas, tolerance: g.tolerance };
+    } else ecartes.push('réglages');
   }
   if (r.derniereSauvegarde !== undefined) {
-    if (!estDateIso(r.derniereSauvegarde)) throw new Error('Profil invalide : dernière sauvegarde');
-    profil.derniereSauvegarde = r.derniereSauvegarde;
+    if (estDateIso(r.derniereSauvegarde)) profil.derniereSauvegarde = r.derniereSauvegarde;
+    else ecartes.push('date de dernière sauvegarde');
   }
-  return profil;
+  return { profil, ecartes };
+}
+
+/** Variante stricte pour les tests et l'import : le profil lu, sans le détail des parties écartées. */
+export function validerProfil(src: unknown, idsConnus: ReadonlySet<string>): Profil {
+  return lireProfil(src, idsConnus).profil;
+}
+
+/** Ce qui est réellement écrit ou exporté : uniquement des données valides et utiles (EXG-02). */
+export function pourStockage(p: Profil): Profil {
+  const leviers: Record<string, EtatLevier> = {};
+  for (const [id, e] of Object.entries(p.leviers)) {
+    if (!e.detenu) continue;
+    leviers[id] = e.finValidite && estDateIso(e.finValidite) ? { detenu: true, finValidite: e.finValidite } : { detenu: true };
+  }
+  const propre: Profil = { version: VERSION_PROFIL, leviers };
+  if (p.reglages && reglagesStockables(p.reglages)) propre.reglages = { ...p.reglages };
+  if (p.derniereSauvegarde && estDateIso(p.derniereSauvegarde)) propre.derniereSauvegarde = p.derniereSauvegarde;
+  return propre;
 }
 
 export function aDesDonnees(p: Profil): boolean {
@@ -73,14 +118,16 @@ export function aDesDonnees(p: Profil): boolean {
 
 /** Contenu du fichier de sauvegarde (EXG-04). */
 export function exporter(p: Profil, aujourdhui: string): string {
-  const donnees: Profil = { version: p.version, leviers: p.leviers };
-  if (p.reglages) donnees.reglages = p.reglages;
+  const { derniereSauvegarde: _date, ...donnees } = pourStockage(p);
+  void _date;
   return JSON.stringify({ format: FORMAT_EXPORT, exporteLe: aujourdhui, profil: donnees }, null, 2);
 }
 
 /** Relit un fichier de sauvegarde ; lève une erreur lisible si le fichier n'est pas valide. */
-export function importer(texte: string, idsConnus: ReadonlySet<string>): Profil {
-  if (texte.length > 100_000) throw new Error('Fichier trop volumineux pour une sauvegarde.');
+export const TAILLE_MAX_IMPORT = 100_000;
+
+export function importer(texte: string, idsConnus: ReadonlySet<string>): Lecture {
+  if (texte.length > TAILLE_MAX_IMPORT) throw new Error('Fichier trop volumineux pour une sauvegarde.');
   let brut: unknown;
   try {
     brut = JSON.parse(texte);
@@ -89,7 +136,11 @@ export function importer(texte: string, idsConnus: ReadonlySet<string>): Profil 
   }
   const r = brut as Record<string, unknown> | null;
   if (!r || r.format !== FORMAT_EXPORT) throw new Error('Ce fichier n’est pas une sauvegarde de Chasse aux bons plans.');
-  return validerProfil(r.profil, idsConnus);
+  try {
+    return lireProfil(r.profil, idsConnus);
+  } catch {
+    throw new Error('Cette sauvegarde est illisible ou provient d’une version non prise en charge.');
+  }
 }
 
 const JOUR = 86_400_000;

@@ -117,12 +117,13 @@ ul.leviers { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75re
 li.levier { background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; padding: 0.75rem 1rem; }
 li.levier.detenu { border: 2px solid var(--accent); }
 .levier-tete { display: flex; align-items: flex-start; gap: 0.75rem; }
-.levier-tete input[type='checkbox'] { width: 28px; height: 28px; min-height: 28px; margin: 0.1rem 0 0; flex: none; accent-color: var(--accent); }
+.levier-tete input[type='checkbox'] { width: 32px; height: 32px; min-height: 32px; margin: 0.1rem 0 0; flex: none; accent-color: var(--accent); }
 .levier-tete label { font-weight: 700; padding: 0.15rem 0; min-height: 44px; }
 .levier-prix { font-weight: 400; color: var(--texte-2); }
 .champ-court { max-width: 16rem; margin-bottom: 0.5rem; }
 li.levier details summary { min-height: 44px; }
-input[type='file'] { min-height: auto; }
+input[type='file'] { min-height: 44px; padding: 0.5rem; }
+.levier-tete label { display: flex; align-items: center; }
 
 footer { color: var(--texte-2); font-size: 0.95rem; padding-bottom: 2rem; margin-top: 2rem; }
 

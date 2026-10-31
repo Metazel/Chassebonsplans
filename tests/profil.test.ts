@@ -9,11 +9,14 @@ import {
   etatValidite,
   exporter,
   importer,
+  lireProfil,
+  pourStockage,
   profilVide,
   rappelSauvegarde,
   validerProfil,
   type Profil,
 } from '../src/domain/profil';
+import { stockageMemoire } from '../src/state/stockage';
 
 const IDS = new Set(LEVIERS.map((l) => l.id));
 
@@ -46,8 +49,13 @@ describe('détection des numéros de carte (EXG-02)', () => {
     expect(luhn('79927398713')).toBe(true);
     expect(luhn('79927398710')).toBe(false);
   });
-  it.each(['4111 1111 1111 1111', '4111-1111-1111-1111', 'ma carte 5555555555554444 merci'])('détecte %s', (t) => expect(contientNumeroCarte(t)).toBe(true));
-  it.each(['21:45', '29,90', '4111 1111 1111 1112', '0612345678', ''])('ignore %s', (t) => expect(contientNumeroCarte(t)).toBe(false));
+  it.each(['4111 1111 1111 1111', '4111-1111-1111-1111', '4111.1111.1111.1111', '4111/1111/1111/1111', 'ma carte 5555555555554444 merci', '9' + '4111111111111111' + '8'])('détecte %s', (t) => expect(contientNumeroCarte(t)).toBe(true));
+  it('règle prudente : toute suite de 13 chiffres ou plus est refusée, Luhn valide ou non', () => {
+    expect(contientNumeroCarte('4111 1111 1111 1112')).toBe(true);
+    expect(contientNumeroCarte('1234567890123')).toBe(true);
+    expect(contientNumeroCarte('123456789012')).toBe(false);
+  });
+  it.each(['21:45', '29,90', '0612345678', '2026-10-31', ''])('ignore %s', (t) => expect(contientNumeroCarte(t)).toBe(false));
 });
 
 describe('profil local : validation de tout ce qui est relu', () => {
@@ -58,18 +66,62 @@ describe('profil local : validation de tout ce qui est relu', () => {
     derniereSauvegarde: '2026-10-31',
   };
   it('accepte un profil valide', () => expect(validerProfil(ok, IDS)).toEqual(ok));
-  it('ignore les leviers inconnus du catalogue', () => {
-    expect(validerProfil({ version: 1, leviers: { inconnu: { detenu: true } } }, IDS).leviers).toEqual({});
+  it('ignore et signale les leviers inconnus du catalogue', () => {
+    const l = lireProfil({ version: 1, leviers: { inconnu: { detenu: true } } }, IDS);
+    expect(l.profil.leviers).toEqual({});
+    expect(l.ecartes).toEqual(['levier inconnu inconnu']);
   });
   it.each([
     ['version future', { version: 2, leviers: {} }],
-    ['leviers en tableau', { version: 1, leviers: [] }],
-    ['détenu non booléen', { version: 1, leviers: { 'visa-premier': { detenu: 'oui' } } }],
-    ['date impossible', { version: 1, leviers: { 'visa-premier': { detenu: true, finValidite: '2027-02-30' } } }],
-    ['réglage trop long', { version: 1, leviers: {}, reglages: { trajet: '1'.repeat(40), limite: '21:45', repas: '10', tolerance: '2' } }],
-    ['numéro de carte glissé dans un réglage', { version: 1, leviers: {}, reglages: { trajet: '15', limite: '21:45', repas: '10', tolerance: '4111111111111111' } }],
+    ['tableau', []],
     ['null', null],
-  ])('rejette : %s', (_nom, p) => expect(() => validerProfil(p, IDS)).toThrow());
+  ])('refuse un profil inexploitable : %s', (_nom, p) => expect(() => lireProfil(p, IDS)).toThrow());
+  it.each([
+    ['leviers en tableau', { version: 1, leviers: [] }, 'leviers'],
+    ['détenu non booléen', { version: 1, leviers: { 'visa-premier': { detenu: 'oui' } } }, 'levier visa-premier'],
+    ['date impossible', { version: 1, leviers: { 'visa-premier': { detenu: true, finValidite: '2027-02-30' } } }, 'levier visa-premier'],
+    ['réglage trop long', { version: 1, leviers: {}, reglages: { trajet: '1'.repeat(40), limite: '21:45', repas: '10', tolerance: '2' } }, 'réglages'],
+    ['numéro de carte dans un réglage', { version: 1, leviers: {}, reglages: { trajet: '15', limite: '21:45', repas: '10', tolerance: '4111111111111111' } }, 'réglages'],
+  ])('écarte sans tout perdre : %s', (_nom, p, ecarte) => {
+    const avecUlys = { ...(p as object), leviers: Array.isArray((p as { leviers: unknown }).leviers) ? [] : { ...(p as { leviers: object }).leviers, 'pass-ulys': { detenu: true } } };
+    const l = lireProfil(avecUlys, IDS);
+    expect(l.ecartes).toContain(ecarte);
+    if (ecarte !== 'leviers') expect(l.profil.leviers['pass-ulys']).toEqual({ detenu: true });
+  });
+  it('les leviers non détenus ne sont pas conservés', () => {
+    expect(validerProfil({ version: 1, leviers: { 'visa-premier': { detenu: false, finValidite: '2027-01-01' } } }, IDS).leviers).toEqual({});
+  });
+});
+
+describe('écriture et export : uniquement des données valides (EXG-02)', () => {
+  it('pourStockage retire les réglages suspects et les leviers non détenus', () => {
+    const sale = {
+      version: 1 as const,
+      leviers: { 'visa-premier': { detenu: false, finValidite: '2027-01-01' }, 'pass-ulys': { detenu: true } },
+      reglages: { trajet: '15', limite: '21:45', repas: '10,00 euros', tolerance: '2' },
+    };
+    expect(pourStockage(sale)).toEqual({ version: 1, leviers: { 'pass-ulys': { detenu: true } } });
+  });
+  it('un export est toujours réimportable, même après une saisie invalide', () => {
+    const p = { version: 1 as const, leviers: { 'pass-ulys': { detenu: true } }, reglages: { trajet: '15', limite: '21:45', repas: '4111111111111111', tolerance: '2' } };
+    const texte = exporter(p, '2026-10-31');
+    expect(texte).not.toContain('4111');
+    expect(importer(texte, IDS).ecartes).toEqual([]);
+  });
+});
+
+describe('stockage en mémoire (repli)', () => {
+  it('lit, écrit par clé, efface tout', async () => {
+    const s = stockageMemoire();
+    expect(await s.lire()).toBeNull();
+    await s.ecrire({ a: 1 });
+    await s.ecrire({ b: 2 }, 'profil-illisible');
+    expect(await s.lire()).toEqual({ a: 1 });
+    expect(await s.lire('profil-illisible')).toEqual({ b: 2 });
+    await s.effacer();
+    expect(await s.lire()).toBeNull();
+    expect(await s.lire('profil-illisible')).toBeNull();
+  });
 });
 
 describe('sauvegarde et restauration (EXG-04)', () => {
@@ -77,12 +129,13 @@ describe('sauvegarde et restauration (EXG-04)', () => {
   it('aller-retour export → import sans perte (hors date de sauvegarde)', () => {
     const texte = exporter(p, '2026-10-31');
     expect(JSON.parse(texte).format).toBe(FORMAT_EXPORT);
-    expect(importer(texte, IDS)).toEqual({ version: 1, leviers: { 'pass-ulys': { detenu: true } } });
+    expect(importer(texte, IDS)).toEqual({ profil: { version: 1, leviers: { 'pass-ulys': { detenu: true } } }, ecartes: [] });
   });
   it('messages lisibles pour un fichier invalide', () => {
     expect(() => importer('pas du json', IDS)).toThrow(/JSON invalide/);
     expect(() => importer('{"format":"autre"}', IDS)).toThrow(/pas une sauvegarde/);
     expect(() => importer('x'.repeat(100_001), IDS)).toThrow(/volumineux/);
+    expect(() => importer('{"format":"chassebonsplans-export","profil":{"version":9}}', IDS)).toThrow(/version non prise en charge/);
   });
 });
 

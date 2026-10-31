@@ -40,12 +40,12 @@ function CarteLevier({ levier, etat, aujourdhui, onChange }: { levier: Levier; e
             }}
           />
           {validite === 'expire' && (
-            <span class="alerte" id={`${idBase}-validite`}>
+            <span class="alerte" role="status" id={`${idBase}-validite`}>
               Expirée : elle n’est plus prise en compte tant que vous ne la renouvelez pas.
             </span>
           )}
           {validite === 'bientot' && (
-            <span class="alerte" id={`${idBase}-validite`}>
+            <span class="alerte" role="status" id={`${idBase}-validite`}>
               Expire dans moins de 30 jours.
             </span>
           )}

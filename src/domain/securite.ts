@@ -1,6 +1,8 @@
 /**
  * EXG-02 : aucune saisie ne doit pouvoir contenir un numéro de carte bancaire.
- * Détection : suite de 13 à 19 chiffres (espaces et tirets tolérés) qui passe le contrôle de Luhn.
+ * Règle prudente : toute suite d'au moins 13 chiffres (séparateurs tolérés) est refusée, qu'elle passe
+ * ou non le contrôle de Luhn. Aucun champ de l'outil n'a besoin d'une telle suite, et un contrôle de Luhn
+ * par fenêtres donnerait autant de faux positifs. `luhn` reste disponible pour un usage ciblé.
  */
 
 export function luhn(chiffres: string): boolean {
@@ -19,11 +21,12 @@ export function luhn(chiffres: string): boolean {
   return chiffres.length > 0 && somme % 10 === 0;
 }
 
-const SUITE = /\d(?:[ -]?\d){12,18}/g;
+/** Suites de chiffres séparés au plus par un espace, un tiret, un point ou une barre oblique. */
+const SUITE = /\d(?:[ .\-/]?\d)*/g;
 
 export function contientNumeroCarte(texte: string): boolean {
   for (const m of texte.matchAll(SUITE)) {
-    if (luhn(m[0].replace(/[ -]/g, ''))) return true;
+    if (m[0].replace(/[ .\-/]/g, '').length >= 13) return true;
   }
   return false;
 }

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { LEVIERS } from '../data/leviers';
-import { aujourdhuiIso, etatValidite, profilVide, rappelSauvegarde, validerProfil, type EtatLevier, type Profil } from '../domain/profil';
+import { aujourdhuiIso, etatValidite, lireProfil, pourStockage, profilVide, rappelSauvegarde, reglagesStockables, type EtatLevier, type Profil } from '../domain/profil';
 import type { LigneTrain, Reglages } from '../domain/saisie';
-import { ouvrirStockage, stockageMemoire, type Stockage } from '../state/stockage';
+import { CLE_ILLISIBLE, ouvrirStockage, stockageMemoire, type Stockage } from '../state/stockage';
 import { Comparateur, REGLAGES_DEFAUT, nouvelleLigne } from './screens/Comparateur';
 import { Leviers } from './screens/Leviers';
 import { Donnees } from './screens/Donnees';
@@ -18,34 +18,62 @@ const IDS = new Set(LEVIERS.map((l) => l.id));
 const lireVue = (h: string): Vue | null => (h === 'comparer' || h === 'leviers' || h === 'donnees' ? h : null);
 const vueDepuisHash = (): Vue => lireVue(location.hash.slice(1)) ?? 'comparer';
 
+/** Relit et valide le profil stocké ; met de côté une copie brute de ce qui est illisible au lieu de l'écraser. */
+async function charger(s: Stockage): Promise<{ profil: Profil; alerte: string | null }> {
+  const brut = await s.lire();
+  if (brut === null || brut === undefined) return { profil: profilVide(), alerte: null };
+  try {
+    const { profil, ecartes } = lireProfil(brut, IDS);
+    if (!ecartes.length) return { profil, alerte: null };
+    await s.ecrire(brut, CLE_ILLISIBLE).catch(() => undefined);
+    return { profil, alerte: `Une partie des données enregistrées était illisible et a été écartée (${ecartes.join(', ')}) ; le reste est conservé.` };
+  } catch {
+    await s.ecrire(brut, CLE_ILLISIBLE).catch(() => undefined);
+    return { profil: profilVide(), alerte: 'Les données enregistrées sur cet appareil étaient illisibles : l’outil repart d’un profil vide. Restaurez une sauvegarde si vous en avez une.' };
+  }
+}
+
 export function App() {
   const [vue, setVue] = useState<Vue>(vueDepuisHash);
   const [stockage, setStockage] = useState<Stockage | null>(null);
-  const [profil, setProfil] = useState<Profil>(profilVide);
-  const [alerteLecture, setAlerteLecture] = useState(false);
+  const [profil, setProfilEtat] = useState<Profil>(profilVide);
+  const profilRef = useRef<Profil>(profil);
+  const [reglages, setReglagesEtat] = useState<Reglages>(REGLAGES_DEFAUT);
+  const [alerteLecture, setAlerteLecture] = useState<string | null>(null);
+  const [erreurEcriture, setErreurEcriture] = useState(false);
   const [lignes, setLignesEtat] = useState<LigneTrain[]>(() => [nouvelleLigne(), nouvelleLigne()]);
   const premiereVue = useRef(true);
   const aujourdhui = aujourdhuiIso();
 
-  // Chargement du profil local, validé ; un profil illisible n'est jamais utilisé tel quel.
+  const appliquer = (p: Profil) => {
+    profilRef.current = p;
+    setProfilEtat(p);
+  };
+
+  // Chargement : aucune saisie n'est possible avant (pas de course entre lecture et écriture).
   useEffect(() => {
     let actif = true;
+    let detacher = () => undefined as void;
     void (async () => {
       const s = await ouvrirStockage().catch(() => stockageMemoire());
-      let p = profilVide();
-      try {
-        const brut = await s.lire();
-        if (brut !== null && brut !== undefined) p = validerProfil(brut, IDS);
-      } catch {
-        if (actif) setAlerteLecture(true);
-      }
-      if (actif) {
-        setStockage(s);
-        setProfil(p);
-      }
+      const { profil: p, alerte } = await charger(s).catch(() => ({ profil: profilVide(), alerte: 'Lecture des données impossible.' }));
+      if (!actif) return;
+      appliquer(p);
+      setReglagesEtat(p.reglages ?? REGLAGES_DEFAUT);
+      setAlerteLecture(alerte);
+      setStockage(s);
+      // Un autre onglet a modifié les données (dont une suppression) : on relit.
+      detacher = s.surChangementExterne(() => {
+        void charger(s).then(({ profil: q }) => {
+          if (!actif) return;
+          appliquer(q);
+          setReglagesEtat(q.reglages ?? REGLAGES_DEFAUT);
+        });
+      });
     })();
     return () => {
       actif = false;
+      detacher();
     };
   }, []);
 
@@ -69,19 +97,34 @@ export function App() {
     document.getElementById('titre-vue')?.focus();
   }, [vue]);
 
-  const enregistrer = (suivant: Profil) => {
-    setProfil(suivant);
-    void stockage?.ecrire(suivant).catch(() => undefined);
+  /** Applique et enregistre ; seule une version nettoyée et valide est écrite (EXG-02). */
+  const enregistrer = (p: Profil): Promise<boolean> => {
+    appliquer(p);
+    if (!stockage) return Promise.resolve(false);
+    return stockage
+      .ecrire(pourStockage(p))
+      .then(() => {
+        setErreurEcriture(false);
+        return true;
+      })
+      .catch(() => {
+        setErreurEcriture(true);
+        return false;
+      });
   };
-  const majProfil = (f: (p: Profil) => Profil) => setProfil((p) => {
-    const suivant = f(p);
-    void stockage?.ecrire(suivant).catch(() => undefined);
-    return suivant;
-  });
 
-  const reglages = profil.reglages ?? REGLAGES_DEFAUT;
-  const setReglages = (f: (r: Reglages) => Reglages) => majProfil((p) => ({ ...p, reglages: f(p.reglages ?? REGLAGES_DEFAUT) }));
-  const setLevier = (id: string, e: EtatLevier) => majProfil((p) => ({ ...p, leviers: { ...p.leviers, [id]: e } }));
+  const setReglages = (f: (r: Reglages) => Reglages) => {
+    const suivant = f(reglages);
+    setReglagesEtat(suivant);
+    // Un réglage trop long ou suspect reste à l'écran (avec son erreur) mais n'est jamais enregistré.
+    if (reglagesStockables(suivant)) void enregistrer({ ...profilRef.current, reglages: suivant });
+  };
+  const setLevier = (id: string, e: EtatLevier) => {
+    const leviers = { ...profilRef.current.leviers };
+    if (e.detenu) leviers[id] = e;
+    else delete leviers[id];
+    void enregistrer({ ...profilRef.current, leviers });
+  };
 
   const detenus = LEVIERS.filter((l) => profil.leviers[l.id]?.detenu);
   const expires = detenus.filter((l) => {
@@ -121,11 +164,17 @@ export function App() {
       <main id="contenu" tabIndex={-1}>
         {alerteLecture && (
           <p class="alerte" role="status">
-            Les données enregistrées sur cet appareil étaient illisibles : l’outil repart d’un profil vide. Restaurez une sauvegarde si vous en avez une.
+            {alerteLecture}
+          </p>
+        )}
+        {erreurEcriture && (
+          <p class="alerte" role="alert">
+            Vos dernières modifications n’ont pas pu être enregistrées sur cet appareil (stockage plein ou indisponible). Téléchargez une sauvegarde depuis
+            « Mes données ».
           </p>
         )}
         {expires.length > 0 && vue !== 'leviers' && (
-          <p class="alerte">
+          <p class="alerte" role="status">
             {expires.map((l) => l.nom).join(', ')} : validité dépassée. <a href="#leviers">Mettre à jour</a>
           </p>
         )}
@@ -134,18 +183,33 @@ export function App() {
             Pensez à sauvegarder vos données : <a href="#donnees">télécharger une sauvegarde</a>.
           </p>
         )}
-        {vue === 'comparer' && <Comparateur lignes={lignes} setLignes={setLignesEtat} reglages={reglages} setReglages={setReglages} resumeLeviers={resumeLeviers} />}
-        {vue === 'leviers' && <Leviers profil={profil} aujourdhui={aujourdhui} onChange={setLevier} />}
-        {vue === 'donnees' && (
+        {!stockage && (
+          <p role="status" class="aide">
+            Chargement de vos données…
+          </p>
+        )}
+        {stockage && vue === 'comparer' && <Comparateur lignes={lignes} setLignes={setLignesEtat} reglages={reglages} setReglages={setReglages} resumeLeviers={resumeLeviers} />}
+        {stockage && vue === 'leviers' && <Leviers profil={profil} aujourdhui={aujourdhui} onChange={setLevier} />}
+        {stockage && vue === 'donnees' && (
           <Donnees
             profil={profil}
-            mode={stockage?.mode ?? 'local'}
+            mode={stockage.mode}
             aujourdhui={aujourdhui}
-            onExporte={() => majProfil((p) => ({ ...p, derniereSauvegarde: aujourdhui }))}
-            onImporte={(p) => enregistrer({ ...p, derniereSauvegarde: aujourdhui })}
+            onExporte={() => void enregistrer({ ...profilRef.current, derniereSauvegarde: aujourdhui })}
+            onImporte={(p) => {
+              setReglagesEtat(p.reglages ?? REGLAGES_DEFAUT);
+              return enregistrer({ ...p, derniereSauvegarde: aujourdhui });
+            }}
             onSupprime={() => {
-              setProfil(profilVide());
-              void stockage?.effacer().catch(() => undefined);
+              appliquer(profilVide());
+              setReglagesEtat(REGLAGES_DEFAUT);
+              return stockage.effacer().then(
+                () => true,
+                () => {
+                  setErreurEcriture(true);
+                  return false;
+                },
+              );
             }}
           />
         )}

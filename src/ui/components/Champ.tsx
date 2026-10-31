@@ -8,6 +8,7 @@ export function Champ(props: {
   aide?: string;
   erreur?: string | undefined;
   inputMode?: 'decimal' | 'numeric';
+  maxLength?: number;
   onInput: (v: string) => void;
 }) {
   // Une erreur ne s'affiche qu'une fois le champ quitté (pas pendant la première saisie).
@@ -18,6 +19,7 @@ export function Champ(props: {
     id: props.id,
     value: props.valeur,
     autoComplete: 'off',
+    maxLength: props.maxLength,
     'aria-invalid': erreur ? ('true' as const) : undefined,
     'aria-describedby': decrit || undefined,
     onInput: (e: Event) => props.onInput((e.currentTarget as HTMLInputElement).value),
