@@ -9,7 +9,7 @@ Aider David et sa famille à choisir leurs déplacements au meilleur rapport qua
 Situations : (1) trajets domicile-travail hebdomadaires Marseille ↔ Paris ; (2) croisière en famille avec catégorie de cabine cible et repli ; (3) événement familial à l'étranger (vols, voiture, logements, assurances).
 
 ## Règle de choix : le coût complet
-Coût complet = prix du billet (après leviers) + coûts induits par les horaires. Lot 1 : repas à bord (≈ 10 €) si l'arrivée au domicile dépasse 21h45 (arrivée en gare 21h30 + 15 min). Choix : le coût complet le plus bas ; à égalité (tolérance paramétrable, 2 € par défaut), le train qui ramène le plus tôt. Cas de test de référence « le sandwich » : 19h00 → 22h00 à 30 € contre 17h45 → 20h45 à 40 € → le second.
+Coût complet = prix du billet (après leviers) + coûts induits par les horaires. Lot 1 : repas à bord (≈ 10 €) si l'arrivée au domicile dépasse 21h45 (arrivée en gare 21h30 + 15 min). Choix : le coût complet le plus bas ; à égalité (tolérance paramétrable, 2 € par défaut), le train qui ramène le plus tôt. Cas de test de référence « le sandwich » : 19h00 → 22h00 à 30 € contre 17h45 → 20h45 à 40 € → le second. 21h45 est une heure théorique : pas de marge de retard (décision de David, les retards sont gérés par le voyageur). Écart toléré bornes comprises.
 
 ## Périmètre (quick wins, du moins coûteux au plus coûteux)
 - Lot 1 (MVP, sans API ni serveur) : CU1 profil de leviers ; CU2 planning domicile-travail (fériés, congés, créneaux 9h-10h / 17h30-20h) ; CU3 rappels d'ouverture des ventes en .ics ; CU4 simulateur carte Avantage / billets croisés / Liberté / MAX + comparateur au coût complet.
@@ -32,7 +32,7 @@ Coût complet = prix du billet (après leviers) + coûts induits par les horaire
 Carte Avantage Adulte : A/R avec au moins une nuit de vendredi, samedi ou dimanche, 61 jours maximum entre aller et retour, TGV INOUI et Intercités, prix plafonnés sur trajets directs en 2de. Billets croisés conformes.
 
 ## Architecture (ADR)
-PWA statique sans serveur (Preact + Vite + TypeScript strict, même socle que ParcPilote). Cœur métier pur dans `src/domain/` (sans DOM, testé unitairement, réutilisable côté serveur au lot 3). Référentiels dans `src/data/`. Écrans dans `src/ui/`. Notifications par fichiers .ics avec alarmes (pas de Web Push avant le lot 3). Stockage IndexedDB (à partir de l'itération qui persiste des données). Budget : ≤ 100 ko de JS compressé, aucune requête réseau après installation.
+PWA statique sans serveur (Preact + Vite + TypeScript strict, même socle que ParcPilote). Cœur métier pur dans `src/domain/` (sans DOM, testé unitairement, réutilisable côté serveur au lot 3). Référentiels dans `src/data/`. Écrans dans `src/ui/`. Notifications par fichiers .ics avec alarmes (pas de Web Push avant le lot 3). Stockage IndexedDB (`src/state/stockage.ts`, repli en mémoire signalé), profil validé à chaque relecture (`src/domain/profil.ts`). Budget : ≤ 100 ko de JS compressé, aucune requête réseau après installation.
 
 ## Méthode
 - Toute modification passe par une pull request ; la fusion sur `main` publie sur GitHub Pages.

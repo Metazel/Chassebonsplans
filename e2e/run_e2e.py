@@ -184,7 +184,15 @@ def accessibilite(browser: Browser) -> None:
         page.get_by_text("Réglages du coût complet").click()
         violations = axe(page)
         shot(page, f"axe-{scheme}")
-        assert not violations, f"{scheme}: {violations}"
+        assert not violations, f"{scheme} comparer: {violations}"
+        for vue, cocher in (("leviers", True), ("donnees", False)):
+            page.goto(URL + "#" + vue)
+            if cocher:
+                page.get_by_label("Carte Avantage Adulte (27-59 ans)").check()
+                page.get_by_text("Conditions").first.click()
+            violations = axe(page)
+            shot(page, f"axe-{scheme}-{vue}")
+            assert not violations, f"{scheme} {vue}: {violations}"
         assert not errors, errors
 
 
@@ -203,14 +211,19 @@ def reflow(browser: Browser) -> None:
     assert not errors, errors
 
 
-@scenario("Clavier : lien d'évitement puis champs atteignables dans l'ordre")
+@scenario("Clavier : le lien d'évitement mène au contenu, puis aux champs")
 def clavier(browser: Browser) -> None:
     page, errors, _ = new_page(browser, is_mobile=False, has_touch=False)
     page.keyboard.press("Tab")
     expect(page.get_by_role("link", name="Aller au contenu")).to_be_focused()
+    page.keyboard.press("Enter")
     page.keyboard.press("Tab")
-    focused = page.evaluate("document.activeElement.id")
-    assert focused.endswith("-dep"), focused
+    assert page.evaluate("document.activeElement.closest('main') !== null"), "le focus n'est pas dans le contenu"
+    for _ in range(3):
+        if page.evaluate("document.activeElement.id").endswith("-dep"):
+            break
+        page.keyboard.press("Tab")
+    assert page.evaluate("document.activeElement.id").endswith("-dep"), page.evaluate("document.activeElement.outerHTML")
     assert not errors, errors
 
 
@@ -242,6 +255,93 @@ def aucune_requete_tierce(_browser: Browser) -> None:
     assert not EXTERNES, EXTERNES
 
 
+@scenario("CU1 — leviers cochés et réglages conservés après rechargement (IndexedDB)")
+def leviers_persistants(browser: Browser) -> None:
+    page, errors, _ = new_page(browser)
+    page.get_by_role("navigation").get_by_role("link", name="Mes leviers").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Mes leviers")
+    expect(page.get_by_role("heading", level=1)).to_be_focused()
+    assert page.title().startswith("Mes leviers"), page.title()
+    page.get_by_label("Carte Avantage Adulte (27-59 ans)").check()
+    page.get_by_label("Carte bancaire Visa Premier").check()
+    page.get_by_label("Fin de validité (facultatif)").fill("2027-03-31")
+    page.get_by_role("navigation").get_by_role("link", name="Comparer").click()
+    expect(page.locator(".resume-leviers")).to_contain_text("Carte Avantage Adulte")
+    page.get_by_text("Réglages du coût complet").click()
+    page.get_by_label("Prix d’un repas à bord (€)").fill("12")
+    page.wait_for_timeout(300)
+    page.reload()
+    expect(page.locator(".resume-leviers")).to_contain_text("Carte Avantage Adulte")
+    page.get_by_text("Réglages du coût complet").click()
+    expect(page.get_by_label("Prix d’un repas à bord (€)")).to_have_value("12")
+    page.goto(URL + "#leviers")
+    expect(page.get_by_label("Carte bancaire Visa Premier")).to_be_checked()
+    expect(page.get_by_label("Fin de validité (facultatif)")).to_have_value("2027-03-31")
+    shot(page, "leviers")
+    assert not errors, errors
+
+
+@scenario("CU1 — carte expirée : signalée et exclue des leviers actifs")
+def levier_expire(browser: Browser) -> None:
+    page, errors, _ = new_page(browser)
+    page.goto(URL + "#leviers")
+    page.get_by_label("Carte Avantage Adulte (27-59 ans)").check()
+    page.get_by_label("Fin de validité (facultatif)").fill("2020-01-31")
+    expect(page.locator("li.levier.detenu .alerte")).to_contain_text("Expirée")
+    page.get_by_role("navigation").get_by_role("link", name="Comparer").click()
+    expect(page.locator("main .alerte").first).to_contain_text("validité dépassée")
+    expect(page.locator(".resume-leviers")).to_contain_text("Aucun levier train")
+    assert not errors, errors
+
+
+@scenario("EXG-04 — sauvegarde téléchargée, restauration, suppression totale confirmée")
+def mes_donnees(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, accept_downloads=True)
+    page.goto(URL + "#leviers")
+    page.get_by_label("Pass Ulys (télépéage)").check()
+    expect(page.locator(".rappel")).to_contain_text("Pensez à sauvegarder")
+    page.get_by_role("navigation").get_by_role("link", name="Mes données").click()
+    with page.expect_download() as dl:
+        page.get_by_role("button", name="Télécharger ma sauvegarde").click()
+    chemin = dl.value.path()
+    donnees = json.loads(Path(chemin).read_text(encoding="utf-8"))
+    assert donnees["format"] == "chassebonsplans-export", donnees
+    assert donnees["profil"]["leviers"]["pass-ulys"]["detenu"] is True, donnees
+    texte_brut = Path(chemin).read_text(encoding="utf-8")
+    assert "derniereSauvegarde" not in texte_brut
+    expect(page.locator(".succes")).to_contain_text("Sauvegarde téléchargée")
+    page.get_by_role("navigation").get_by_role("link", name="Comparer").click()
+    expect(page.locator(".rappel")).to_have_count(0)
+    page.get_by_role("navigation").get_by_role("link", name="Mes données").click()
+    page.get_by_role("button", name="Tout effacer").click()
+    expect(page.get_by_role("button", name="Oui, tout effacer")).to_be_focused()
+    page.get_by_role("button", name="Oui, tout effacer").click()
+    expect(page.locator(".succes")).to_contain_text("effacées")
+    page.reload()
+    page.goto(URL + "#leviers")
+    expect(page.get_by_label("Pass Ulys (télépéage)")).not_to_be_checked()
+    page.goto(URL + "#donnees")
+    page.get_by_label("Choisir un fichier de sauvegarde (.json)").set_input_files(chemin)
+    expect(page.locator(".succes")).to_contain_text("restaurée")
+    page.goto(URL + "#leviers")
+    expect(page.get_by_label("Pass Ulys (télépéage)")).to_be_checked()
+    page.goto(URL + "#donnees")
+    page.get_by_label("Choisir un fichier de sauvegarde (.json)").set_input_files({"name": "faux.json", "mimeType": "application/json", "buffer": b'{"format":"autre"}'})
+    expect(page.locator("p.erreur")).to_contain_text("pas une sauvegarde")
+    assert not errors, errors
+
+
+@scenario("Navigation — page courante annoncée ; le lien d'évitement ne change pas de vue")
+def navigation(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, is_mobile=False, has_touch=False)
+    page.goto(URL + "#leviers")
+    expect(page.get_by_role("navigation").get_by_role("link", name="Mes leviers")).to_have_attribute("aria-current", "page")
+    page.keyboard.press("Tab")
+    page.keyboard.press("Enter")
+    expect(page.get_by_role("heading", level=1)).to_have_text("Mes leviers")
+    assert not errors, errors
+
+
 def serve() -> ThreadingHTTPServer:
     class Silencieux(SimpleHTTPRequestHandler):
         def log_message(self, *_args) -> None:  # noqa: D401 - journal muet
@@ -261,7 +361,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:

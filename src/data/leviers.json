@@ -1,0 +1,96 @@
+{
+  "version": "2026-10-31",
+  "leviers": [
+    {
+      "id": "carte-avantage-adulte",
+      "nom": "Carte Avantage Adulte (27-59 ans)",
+      "categorie": "train",
+      "prix": "49 € par an",
+      "effet": "30 % de réduction et prix plafonnés en 2de classe sur TGV INOUI et Intercités.",
+      "conditions": [
+        "Aller-retour avec au moins une nuit de vendredi, samedi ou dimanche sur place, aller simple le samedi ou le dimanche, ou voyage avec un enfant.",
+        "61 jours au plus entre l'aller et le retour.",
+        "Prix plafonnés sur trajets directs en 2de classe : 49 € (moins de 1 h 30), 69 € (1 h 30 à 3 h), 89 € (plus de 3 h).",
+        "60 % de réduction pour 3 enfants de 4 à 11 ans au plus, billets achetés en même temps que celui du titulaire.",
+        "Pas valable sur OUIGO."
+      ],
+      "validiteAnnuelle": true,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/carte-avantage/carte-avantage-adulte/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "carte-liberte",
+      "nom": "Carte Liberté",
+      "categorie": "train",
+      "prix": "399 € par an (379 € avec un contrat Pro)",
+      "effet": "Prix fixes et billets entièrement flexibles pour les voyages professionnels ; 30 % de réduction et prix plafonnés pour les voyages personnels.",
+      "conditions": ["Conditions détaillées à vérifier sur SNCF Connect au moment de la souscription."],
+      "validiteAnnuelle": true,
+      "source": "https://milesopedia.fr/transports/sncf-carte-avantage-adulte/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "max-actif",
+      "nom": "Abonnement MAX ACTIF / MAX ACTIF+",
+      "categorie": "train",
+      "prix": "Selon le trajet, 12 mensualités",
+      "effet": "Réservations incluses sur TGV INOUI : 250 (du lundi au jeudi) avec MAX ACTIF, 450 (7 jours sur 7) avec MAX ACTIF+, 2 trajets par jour au plus.",
+      "conditions": [
+        "Réservé à une liste fermée de trajets fixée par SNCF Voyageurs : vérifier que Marseille - Paris en fait partie.",
+        "Engagement de 12 mois, reconduction tacite.",
+        "Annulation ou échange sans frais jusqu'à 30 minutes après le départ."
+      ],
+      "validiteAnnuelle": true,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "carte-voyageur-sncf",
+      "nom": "Carte Voyageur SNCF (fidélité)",
+      "categorie": "train",
+      "prix": "Gratuite",
+      "effet": "Programme de fidélité : cumul de points et offres partenaires. Ce n'est pas une carte de réduction : ni remise de 30 %, ni prix plafonnés.",
+      "conditions": ["Les points s'échangent dans la boutique des primes (billets, cartes de réduction, bons d'achat)."],
+      "validiteAnnuelle": false,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/notre-programme-de-fidelite/le-programme-grand-voyageur/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "visa-premier",
+      "nom": "Carte bancaire Visa Premier",
+      "categorie": "assurance",
+      "prix": "Selon la banque",
+      "effet": "Assurance annulation et interruption de voyage incluse, jusqu'à 5 000 € par an et par assuré en général.",
+      "conditions": [
+        "Le voyage doit être payé avec la carte (en totalité ou en grande partie selon la banque).",
+        "Couvre le titulaire, son conjoint et ses enfants à charge.",
+        "Motifs d'annulation limitatifs, définis par la notice de la banque : une simple incertitude sur le programme n'est pas couverte."
+      ],
+      "validiteAnnuelle": false,
+      "source": "https://hellosafe.fr/assurance-voyage/assurance-carte/annulation",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "pass-ulys",
+      "nom": "Pass Ulys (télépéage)",
+      "categorie": "route",
+      "prix": "Selon la formule",
+      "effet": "Accès à plus de 1 000 parkings partenaires (gares, aéroports) et au Club Ulys : réductions chez 250 marques, dont location de voiture et hébergement.",
+      "conditions": ["Offres du Club Ulys variables, à consulter dans l'espace client Ulys."],
+      "validiteAnnuelle": false,
+      "source": "https://www.vinci-autoroutes.com/fr/actualites/services-et-aires/club-ulys/",
+      "verifieLe": "2026-10-31"
+    },
+    {
+      "id": "carte-fnac-plus",
+      "nom": "Carte Fnac+",
+      "categorie": "partenaires",
+      "prix": "14,99 € pour 3 ans (engagement selon l'offre)",
+      "effet": "Spectacles et événements à prix réduit ; offres partenaires, dont certaines pour les voyages.",
+      "conditions": ["Offres partenaires variables, à consulter dans l'espace client Fnac."],
+      "validiteAnnuelle": false,
+      "source": "https://milesopedia.fr/programme-fidelite/carte-fnac/",
+      "verifieLe": "2026-10-31"
+    }
+  ]
+}
