@@ -153,7 +153,7 @@ def numero(trip: dict) -> str:
         if v and any(c.isdigit() for c in v) and len(v) <= 12:
             return v
     import re
-    m = re.search(r"(\d{3,5})(?!.*\d)", trip.get("trip_id", ""))
+    m = re.search(r"(?<!\d)(\d{3,5})(?!\d)", trip.get("trip_id", ""))
     return m.group(1) if m else ""
 
 
