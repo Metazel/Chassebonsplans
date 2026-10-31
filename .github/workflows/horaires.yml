@@ -42,7 +42,16 @@ jobs:
           for sens in ("MP", "PM"):
               ex = [t for t in d["trains"] if t["s"] == sens][:14]
               echo(("Exemples " + sens, " | ".join(f'{t["o"]} {t["n"]} {hm(t["d"])}→{hm(t["a"])} {t["gd"]}→{t["ga"]} ({len(t["j"])} j)' for t in ex)))
-          import os
+          import os, zipfile, io, urllib.request, sys
+          sys.path.insert(0, "scripts")
+          import extraire_horaires as ex
+          meta = ex.jeu("horaires-des-trains-trenitalia-france")
+          url = [r for r in meta["resources"] if str(r.get("format","")).upper()=="GTFS"][0]["url"]
+          z = zipfile.ZipFile(io.BytesIO(ex.ouvrir(url, 120).read()))
+          for f in ("trips.txt", "routes.txt"):
+              n = [x for x in z.namelist() if x.endswith(f)][0]
+              lignes = z.read(n).decode("utf-8-sig").splitlines()[:3]
+              print("::notice title=Trenitalia " + f + "::" + " || ".join(lignes).replace("::", ": :"))
           print("::notice title=Taille::" + str(os.path.getsize("horaires.json")) + " octets")
           PY
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

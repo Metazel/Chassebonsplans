@@ -109,8 +109,8 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
         if not hd:
             continue
         # Côté départ : on garde l'heure de départ ; côté arrivée : l'heure d'arrivée (choisie plus bas).
-        p.setdefault(cote + "d", (seq, heure(hd), noms_arrets[s]))
-        p[cote + "a"] = (seq, heure(ha), noms_arrets[s])
+        p.setdefault(cote + "d", (seq, heure(hd), noms_arrets[s], s))
+        p[cote + "a"] = (seq, heure(ha), noms_arrets[s], s)
 
     agences = {r.get("agency_id", ""): r.get("agency_name", "") for r in lire_csv(z, "agency.txt")}
     lignes = {}
@@ -135,8 +135,8 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
                 ligne = lignes.get(r["route_id"], {})
                 trains.append({
                     "sens": sens,
-                    "numero": (r.get("trip_short_name") or r.get("trip_headsign") or "").strip()[:12],
-                    "operateur": operateur(source, ligne, r),
+                    "numero": numero(r),
+                    "operateur": operateur(source, ligne, r, p[dep_cle][3]),
                     "gareDepart": p[dep_cle][2],
                     "gareArrivee": p[arr_cle][2],
                     "depart": p[dep_cle][1],
@@ -146,9 +146,28 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
     return trains
 
 
-def operateur(source: str, ligne: dict, trip: dict) -> str:
+def numero(trip: dict) -> str:
+    """Numéro commercial : trip_short_name, sinon trip_headsign numérique, sinon chiffres finaux du trip_id."""
+    for cle in ("trip_short_name", "trip_headsign"):
+        v = (trip.get(cle) or "").strip()
+        if v and any(c.isdigit() for c in v) and len(v) <= 12:
+            return v
+    import re
+    m = re.search(r"(\d{3,5})(?!.*\d)", trip.get("trip_id", ""))
+    return m.group(1) if m else ""
+
+
+def operateur(source: str, ligne: dict, trip: dict, stop_id: str = "") -> str:
     if source == "Trenitalia France":
         return "Trenitalia (Frecciarossa)"
+    # Dans le GTFS SNCF, l'identifiant d'arrêt porte le transporteur : StopPoint:OCEOUIGO-…, OCETGV INOUI-…
+    sid = stop_id.upper()
+    if "OUIGO" in sid:
+        return "OUIGO"
+    if "INTERCIT" in sid:
+        return "Intercités"
+    if "TGV INOUI" in sid or "OCETGV" in sid:
+        return "TGV INOUI"
     texte = normaliser(" ".join([ligne.get("agence", ""), ligne.get("nom", ""), ligne.get("type", ""), trip.get("trip_headsign", "")]))
     if "ouigo" in texte:
         return "OUIGO"

@@ -107,6 +107,17 @@ class Extraction(unittest.TestCase):
             self.assertEqual(data["debut"], "2026-11-02")
             self.assertEqual({t["o"] for t in data["trains"]}, {"TGV INOUI", "OUIGO", "Trenitalia (Frecciarossa)"})
 
+    def test_operateur_depuis_l_identifiant_d_arret_sncf(self):
+        self.assertEqual(ex.operateur("SNCF Voyageurs", {}, {}, "StopPoint:OCEOUIGO-87751008"), "OUIGO")
+        self.assertEqual(ex.operateur("SNCF Voyageurs", {}, {}, "StopPoint:OCETGV INOUI-87751008"), "TGV INOUI")
+        self.assertEqual(ex.operateur("SNCF Voyageurs", {"nom": "OUIGO"}, {}, "M"), "OUIGO")
+
+    def test_numero_de_secours(self):
+        self.assertEqual(ex.numero({"trip_short_name": "6102"}), "6102")
+        self.assertEqual(ex.numero({"trip_short_name": "", "trip_headsign": "9241"}), "9241")
+        self.assertEqual(ex.numero({"trip_id": "FR_9241_20261102"}), "9241")
+        self.assertEqual(ex.numero({"trip_id": "abc"}), "")
+
     def test_normalisation_des_gares(self):
         self.assertTrue(ex.est_marseille("MARSEILLE ST CHARLES"))
         self.assertTrue(ex.est_marseille("Marseille-Saint-Charles"))
