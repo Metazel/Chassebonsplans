@@ -25,7 +25,7 @@ import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-PAN = "https://transport.data.gouv.fr/api/datasets/"
+PAN = "https://transport.data.gouv.fr/api/datasets"
 JEUX = {
     "horaires-sncf": "SNCF Voyageurs",
     "horaires-des-trains-trenitalia-france": "Trenitalia France",
@@ -171,18 +171,40 @@ def regrouper(trains: list[dict], debut: date) -> list[dict]:
     return sortie
 
 
+_CATALOGUE: list | None = None
+
+
+def ouvrir(url: str, timeout: int):
+    try:
+        return urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "chassebonsplans-horaires"}), timeout=timeout)
+    except Exception as exc:  # noqa: BLE001 - l'URL fautive est indispensable au diagnostic
+        raise RuntimeError(f"{url} : {exc}") from exc
+
+
+def jeu(slug: str) -> dict:
+    """Fiche d'un jeu de données du point d'accès national, retrouvée par son slug dans le catalogue."""
+    global _CATALOGUE
+    if _CATALOGUE is None:
+        with ouvrir(PAN, 120) as r:
+            _CATALOGUE = json.load(r)
+    for d in _CATALOGUE:
+        if d.get("slug") == slug or d.get("page_url", "").rstrip("/").endswith("/" + slug):
+            return d
+    raise RuntimeError(f"jeu de données introuvable sur le PAN : {slug}")
+
+
 def telecharger(slug: str) -> tuple[bytes, dict]:
-    with urllib.request.urlopen(PAN + slug, timeout=60) as r:
-        meta = json.load(r)
+    meta = jeu(slug)
     gtfs = [res for res in meta.get("resources", []) if str(res.get("format", "")).upper() == "GTFS" and res.get("url")]
     if not gtfs:
         raise RuntimeError(f"aucune ressource GTFS pour {slug}")
     res = gtfs[0]
-    with urllib.request.urlopen(res["url"], timeout=300) as r:
+    with ouvrir(res["url"], 300) as r:
         contenu = r.read(TAILLE_MAX + 1)
     if len(contenu) > TAILLE_MAX:
         raise RuntimeError(f"ressource trop volumineuse : {slug}")
     licence = meta.get("licence") or meta.get("license") or "voir la source"
+    print(f"{slug} : {res.get('title', '')} — {res['url']}", file=sys.stderr)
     return contenu, {"nom": JEUX[slug], "url": f"https://transport.data.gouv.fr/datasets/{slug}", "licence": licence}
 
 
