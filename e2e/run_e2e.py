@@ -421,6 +421,7 @@ def serve() -> ThreadingHTTPServer:
             pass
 
     handler = functools.partial(Silencieux, directory=str(ROOT / "dist"))
+    ThreadingHTTPServer.allow_reuse_address = True
     srv = ThreadingHTTPServer(("127.0.0.1", 4173), handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
@@ -441,6 +442,7 @@ def main() -> int:
             browser.close()
     finally:
         srv.shutdown()
+        srv.server_close()
     # Un scénario en échec est rejoué une fois, seul : un succès au second essai est signalé comme instable.
     echecs = [name for name, passed, _ in results if not passed]
     if echecs:
@@ -455,6 +457,7 @@ def main() -> int:
                 browser.close()
         finally:
             srv.shutdown()
+            srv.server_close()
         second = {name: (passed, info) for name, passed, info in results[avant:]}
         del results[avant:]
         for i, (name, passed, info) in enumerate(results):
