@@ -72,7 +72,7 @@ jobs:
       - run: python -m unittest scripts/test_extraire_horaires.py
       # Horaires réels Marseille Saint-Charles <-> Paris (SNCF, Trenitalia) depuis transport.data.gouv.fr.
       # Sur une PR, une source indisponible n'empêche pas la vérification : l'échantillon versionné est gardé.
-      # Sur main, pas d'horaires réels et récents = pas de publication (la version en ligne reste).
+      # Sur main, pas d'horaires réels couvrant 4 semaines pour chaque source = pas de publication (la version en ligne reste).
       - name: Extraire les horaires
         env:
           EVENEMENT: ${{ github.event_name }}
@@ -83,7 +83,7 @@ jobs:
           from datetime import date, timedelta
           d = json.load(open("horaires-extraits.json"))
           sens = {t["s"] for t in d["trains"]}
-          ok = sens == {"MP", "PM"} and date.fromisoformat(d["fin"]) >= date.today() + timedelta(days=56) and date.fromisoformat(d["debut"]) <= date.today()
+          ok = sens == {"MP", "PM"} and date.fromisoformat(d["fin"]) >= date.today() + timedelta(days=28) and date.fromisoformat(d["debut"]) <= date.today()
           print(f"période {d['debut']} → {d['fin']}, {len(d['trains'])} trains, sens {sorted(sens)}")
           sys.exit(0 if ok else 1)
           PY
@@ -96,6 +96,8 @@ jobs:
             echo "::error title=Horaires::extraction impossible ou incomplète : $(tail -c 600 erreur.txt | tr '\n' ' ' | sed 's/::/: :/g')"
             exit 1
           fi
+      # Le fichier qui sera publié passe par le validateur de l'appli : aucun train écarté, les deux créneaux servis.
+      - run: npx vitest run tests/horaires-publies.test.ts
       - run: npm run build
       - run: npm run build:single
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

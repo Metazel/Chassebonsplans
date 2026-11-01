@@ -108,9 +108,12 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
         ha = r.get("arrival_time") or r.get("departure_time") or ""
         if not hd:
             continue
-        # Côté départ : on garde l'heure de départ ; côté arrivée : l'heure d'arrivée (choisie plus bas).
-        p.setdefault(cote + "d", (seq, heure(hd), noms_arrets[s], s))
-        p[cote + "a"] = (seq, heure(ha), noms_arrets[s], s)
+        # Premier passage (plus petite séquence) pour partir, dernier (plus grande) pour arriver,
+        # quel que soit l'ordre des lignes dans stop_times.txt.
+        if cote + "d" not in p or seq < p[cote + "d"][0]:
+            p[cote + "d"] = (seq, heure(hd), noms_arrets[s], s)
+        if cote + "a" not in p or seq > p[cote + "a"][0]:
+            p[cote + "a"] = (seq, heure(ha), noms_arrets[s], s)
 
     agences = {r.get("agency_id", ""): r.get("agency_name", "") for r in lire_csv(z, "agency.txt")}
     lignes = {}
@@ -133,10 +136,13 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
                 if not jours:
                     continue
                 ligne = lignes.get(r["route_id"], {})
+                # Trenitalia France : le numéro commercial est l'identifiant de ligne (6119, 6105…).
+                num = r["route_id"].strip()[:12] if source == "Trenitalia France" else numero(r)
+                if not num:
+                    continue  # sans numéro, le voyageur ne pourrait pas retrouver le train à la vente
                 trains.append({
                     "sens": sens,
-                    # Trenitalia France : le numéro commercial est l'identifiant de ligne (6119, 6105…).
-                    "numero": r["route_id"].strip()[:12] if source == "Trenitalia France" else numero(r),
+                    "numero": num,
                     "operateur": operateur(source, ligne, r, p[dep_cle][3]),
                     "gareDepart": p[dep_cle][2],
                     "gareArrivee": p[arr_cle][2],
@@ -145,6 +151,10 @@ def extraire(z: zipfile.ZipFile, source: str, debut: date, fin: date) -> list[di
                     "jours": [j.isoformat() for j in jours],
                 })
     return trains
+
+
+def derniere_date(trains: list[dict], debut: date) -> date:
+    return max((date.fromisoformat(j) for t in trains for j in t["jours"]), default=debut)
 
 
 def numero(trip: dict) -> str:
@@ -238,12 +248,15 @@ def main() -> int:
     fin = debut + timedelta(days=HORIZON_JOURS)
 
     trains, sources = [], []
+    couverture: dict[str, date] = {}  # dernière date de circulation trouvée, par source
     if args.gtfs:
         for chemin in args.gtfs:
             nom = "Trenitalia France" if "trenitalia" in chemin.lower() else "SNCF Voyageurs"
             with zipfile.ZipFile(chemin) as z:
-                trains += extraire(z, nom, debut, fin)
-            sources.append({"nom": nom, "url": "fichier local", "licence": "ODbL"})
+                trouves = extraire(z, nom, debut, fin)
+            trains += trouves
+            couverture[nom] = derniere_date(trouves, debut)
+            sources.append({"nom": nom, "url": "https://transport.data.gouv.fr", "licence": "fichier local"})
     else:
         for slug in JEUX:
             contenu, meta = telecharger(slug)
@@ -252,15 +265,21 @@ def main() -> int:
             if not trouves:
                 raise RuntimeError(f"aucun train Marseille <-> Paris trouvé dans {slug}")
             trains += trouves
+            couverture[meta["nom"]] = derniere_date(trouves, debut)
             sources.append(meta)
 
+    # La période annoncée s'arrête là où la source la moins avancée s'arrête : au-delà, l'appli dit
+    # « pas encore publiés » plutôt que « aucun train » ou une liste incomplète d'opérateurs.
+    fin = min([fin, *couverture.values()])
+    trains = [{**t, "jours": [j for j in t["jours"] if date.fromisoformat(j) <= fin]} for t in trains]
+    trains = [t for t in trains if t["jours"]]
     groupes = regrouper(trains, debut)
     sortie = {"version": 1, "genereLe": date.today().isoformat(), "debut": debut.isoformat(), "fin": fin.isoformat(), "sources": sources, "trains": groupes}
     Path(args.sortie).write_text(json.dumps(sortie, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     par_op: dict[str, int] = {}
     for g in groupes:
         par_op[g["o"]] = par_op.get(g["o"], 0) + len(g["j"])
-    print(json.dumps({"courses": len(groupes), "circulations_par_operateur": par_op}, ensure_ascii=False))
+    print(json.dumps({"courses": len(groupes), "circulations_par_operateur": par_op, "couverture": {k: v.isoformat() for k, v in couverture.items()}, "fin": fin.isoformat()}, ensure_ascii=False))
     return 0
 
 

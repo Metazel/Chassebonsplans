@@ -107,6 +107,21 @@ class Extraction(unittest.TestCase):
             data = json.loads(sortie.read_text(encoding="utf-8"))
             self.assertEqual(data["debut"], "2026-11-02")
             self.assertEqual({t["o"] for t in data["trains"]}, {"TGV INOUI", "OUIGO", "Trenitalia (Frecciarossa)"})
+            # Trenitalia ne couvre que jusqu'au 4 novembre : la période annoncée s'y arrête (pas de « tous opérateurs » faux).
+            self.assertEqual(data["fin"], "2026-11-04")
+            self.assertTrue(all(max(t["j"]) <= 2 for t in data["trains"]), "aucun jour au-delà de la période")
+
+    def test_ordre_des_passages_independant_du_fichier(self):
+        desordre = {**SNCF, "stop_times.txt": (
+            "trip_id,arrival_time,departure_time,stop_id,stop_sequence\n"
+            "T1,09:20:00,09:20:00,P,3\nT1,06:15:00,06:16:00,A,2\nT1,06:00:00,06:00:00,M,1\n"
+        )}
+        t = next(x for x in ex.extraire(gtfs(desordre), "SNCF Voyageurs", DEBUT, FIN) if x["numero"] == "6102")
+        self.assertEqual((t["sens"], t["depart"], t["arrivee"]), ("MP", 6 * 60, 9 * 60 + 20))
+
+    def test_train_sans_numero_ecarte(self):
+        sans = {**SNCF, "trips.txt": "route_id,service_id,trip_id,trip_short_name\nR1,S1,T1,\nR2,S2,T2,7808\n"}
+        self.assertEqual([t["numero"] for t in ex.extraire(gtfs(sans), "SNCF Voyageurs", DEBUT, FIN)], ["7808"])
 
     def test_operateur_depuis_l_identifiant_d_arret_sncf(self):
         self.assertEqual(ex.operateur("SNCF Voyageurs", {}, {}, "StopPoint:OCEOUIGO-87751008"), "OUIGO")
