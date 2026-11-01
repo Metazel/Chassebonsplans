@@ -107,9 +107,9 @@ class Extraction(unittest.TestCase):
             data = json.loads(sortie.read_text(encoding="utf-8"))
             self.assertEqual(data["debut"], "2026-11-02")
             self.assertEqual({t["o"] for t in data["trains"]}, {"TGV INOUI", "OUIGO", "Trenitalia (Frecciarossa)"})
-            # Trenitalia ne couvre que jusqu'au 4 novembre : la période annoncée s'y arrête (pas de « tous opérateurs » faux).
-            self.assertEqual(data["fin"], "2026-11-04")
-            self.assertTrue(all(max(t["j"]) <= 2 for t in data["trains"]), "aucun jour au-delà de la période")
+            # Chaque source annonce sa couverture réelle ; la période globale s'arrête à la plus avancée.
+            self.assertEqual({x["nom"]: x["fin"] for x in data["sources"]}, {"SNCF Voyageurs": "2026-11-13", "Trenitalia France": "2026-11-04"})
+            self.assertEqual(data["fin"], "2026-11-13")
 
     def test_ordre_des_passages_independant_du_fichier(self):
         desordre = {**SNCF, "stop_times.txt": (

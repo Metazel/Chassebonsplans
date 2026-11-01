@@ -72,7 +72,7 @@ jobs:
       - run: python -m unittest scripts/test_extraire_horaires.py
       # Horaires réels Marseille Saint-Charles <-> Paris (SNCF, Trenitalia) depuis transport.data.gouv.fr.
       # Sur une PR, une source indisponible n'empêche pas la vérification : l'échantillon versionné est gardé.
-      # Sur main, pas d'horaires réels couvrant 4 semaines pour chaque source = pas de publication (la version en ligne reste).
+      # Sur main, horaires réels incomplets ou trop courts = pas de publication (la version en ligne reste).
       - name: Extraire les horaires
         env:
           EVENEMENT: ${{ github.event_name }}
@@ -83,7 +83,10 @@ jobs:
           from datetime import date, timedelta
           d = json.load(open("horaires-extraits.json"))
           sens = {t["s"] for t in d["trains"]}
-          ok = sens == {"MP", "PM"} and date.fromisoformat(d["fin"]) >= date.today() + timedelta(days=28) and date.fromisoformat(d["debut"]) <= date.today()
+          # 4 semaines au moins au total, et chaque source encore vivante (au moins 1 semaine devant elle).
+          ok = (sens == {"MP", "PM"} and date.fromisoformat(d["debut"]) <= date.today()
+                and date.fromisoformat(d["fin"]) >= date.today() + timedelta(days=28)
+                and all(date.fromisoformat(s.get("fin", d["fin"])) >= date.today() + timedelta(days=7) for s in d["sources"]))
           print(f"période {d['debut']} → {d['fin']}, {len(d['trains'])} trains, sens {sorted(sens)}")
           sys.exit(0 if ok else 1)
           PY

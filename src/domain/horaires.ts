@@ -26,6 +26,8 @@ export interface SourceHoraires {
   nom: string;
   url: string;
   licence: string;
+  /** Dernier jour couvert par cette source (sinon : fin globale). */
+  fin?: string;
 }
 
 export interface Horaires {
@@ -87,7 +89,12 @@ export function validerHoraires(src: unknown): Horaires {
   const sources = r.sources.map((s: Record<string, unknown>) => {
     const url = texte(s.url, 200);
     if (!url.startsWith('https://')) throw new Error('Horaires invalides : source');
-    return { nom: texte(s.nom, 120), url, licence: texte(s.licence, 40) };
+    const source: SourceHoraires = { nom: texte(s.nom, 120), url, licence: texte(s.licence, 40) };
+    if (s.fin !== undefined) {
+      if (!estDateIso(s.fin)) throw new Error('Horaires invalides : fin de source');
+      source.fin = s.fin;
+    }
+    return source;
   });
   return { debut: r.debut as string, fin: r.fin as string, genereLe: r.genereLe as string, sources, trains, ecartes: lus.length - trains.length };
 }
@@ -95,6 +102,9 @@ export function validerHoraires(src: unknown): Horaires {
 export function couvre(h: Horaires, date: string): boolean {
   return date >= h.debut && date <= h.fin;
 }
+
+/** Sources qui ne couvrent pas encore cette date (liste de trains alors incomplète). */
+export const sourcesAbsentes = (h: Horaires, date: string) => h.sources.filter((s) => (s.fin ?? h.fin) < date).map((s) => s.nom);
 
 /** Âge des horaires publiés, en jours ; au-delà de 14 jours l'appli le signale (publication hebdomadaire). */
 export const AGE_MAX_HORAIRES = 14;

@@ -596,6 +596,22 @@ def horaires_publies(browser: Browser) -> None:
     assert not errors, errors
 
 
+@scenario("Résilience — une source pas encore publiée pour la date : liste signalée incomplète")
+def source_absente(browser: Browser) -> None:
+    partiel = json.loads(HORAIRES)
+    partiel["sources"] = [
+        {"nom": "SNCF Voyageurs", "url": "https://transport.data.gouv.fr/datasets/horaires-sncf", "licence": "odc-odbl", "fin": "2027-01-31"},
+        {"nom": "Trenitalia France", "url": "https://transport.data.gouv.fr/datasets/horaires-des-trains-trenitalia-france", "licence": "lov2", "fin": "2026-12-11"},
+    ]
+    page, errors, _ = new_page(browser, vue="deplacements", horaires=json.dumps(partiel))
+    ajouter_deplacement(page, "2026-12-16", "2026-12-18")
+    aller = bloc(page, "Aller")
+    expect(aller).to_contain_text("Horaires Trenitalia France pas encore publiés pour cette date")
+    expect(aller).to_contain_text("opérateurs publiés")
+    expect(page.locator("main")).to_contain_text("Trenitalia France (nouvelle fenêtre), Licence Ouverte 2.0, publiés jusqu’au vendredi 11 décembre 2026")
+    assert not errors, errors
+
+
 @scenario("Résilience — date au-delà des horaires publiés : signalée, pas de train inventé")
 def horaires_non_publies(browser: Browser) -> None:
     page, errors, _ = new_page(browser, vue="deplacements")
@@ -654,7 +670,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, horaires_non_publies, purge_24_mois, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:

@@ -10,6 +10,7 @@ import {
   couvre,
   proposer,
   repasABord,
+  sourcesAbsentes,
   texteRecherche,
   trainsDuJour,
   validerHoraires,
@@ -100,6 +101,19 @@ describe('trains du jour et créneaux (cadrage v2 : aller 9h00-9h40, retour 17h3
       { s: 'MP', n: '1', d: 6 * 60, a: 10 * 60 },
     ]);
     expect(numeros(proposer(h, '2026-11-02', 'MP').proches)).toEqual(['1']);
+  });
+  it('couverture par source : la source en retard est signalée au-delà de sa fin', () => {
+    const h = validerHoraires({
+      ...brut,
+      sources: [
+        { nom: 'SNCF Voyageurs', url: 'https://example.org/a', licence: 'odc-odbl', fin: '2027-01-31' },
+        { nom: 'Trenitalia France', url: 'https://example.org/b', licence: 'lov2', fin: '2026-12-11' },
+      ],
+    });
+    expect(sourcesAbsentes(h, '2026-12-11')).toEqual([]);
+    expect(sourcesAbsentes(h, '2026-12-12')).toEqual(['Trenitalia France']);
+    expect(sourcesAbsentes(H, '2027-01-31')).toEqual([]);
+    expect(() => validerHoraires({ ...brut, sources: [{ ...brut.sources[0], fin: 'demain' }] })).toThrow();
   });
   it('âge des horaires publiés', () => {
     expect(ageHoraires(H, '2026-11-15')).toBe(14);

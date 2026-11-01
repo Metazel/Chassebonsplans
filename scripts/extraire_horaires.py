@@ -268,11 +268,11 @@ def main() -> int:
             couverture[meta["nom"]] = derniere_date(trouves, debut)
             sources.append(meta)
 
-    # La période annoncée s'arrête là où la source la moins avancée s'arrête : au-delà, l'appli dit
-    # « pas encore publiés » plutôt que « aucun train » ou une liste incomplète d'opérateurs.
-    fin = min([fin, *couverture.values()])
-    trains = [{**t, "jours": [j for j in t["jours"] if date.fromisoformat(j) <= fin]} for t in trains]
-    trains = [t for t in trains if t["jours"]]
+    # Chaque source annonce sa propre fin : au-delà, l'appli signale qu'elle manque (liste incomplète)
+    # au lieu d'affirmer « aucun train » ; la période globale s'arrête à la source la plus avancée.
+    for src in sources:
+        src["fin"] = min(fin, couverture[src["nom"]]).isoformat()
+    fin = min(fin, max(couverture.values(), default=debut))
     groupes = regrouper(trains, debut)
     sortie = {"version": 1, "genereLe": date.today().isoformat(), "debut": debut.isoformat(), "fin": fin.isoformat(), "sources": sources, "trains": groupes}
     Path(args.sortie).write_text(json.dumps(sortie, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

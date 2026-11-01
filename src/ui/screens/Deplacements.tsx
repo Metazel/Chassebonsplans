@@ -14,6 +14,7 @@ import {
   couvre,
   proposer,
   repasABord,
+  sourcesAbsentes,
   texteRecherche,
   trainsDuJour,
   type Horaires,
@@ -119,6 +120,7 @@ function BlocTrajet(props: {
   const publie = h !== null && couvre(h, trajet.date);
   const { dansCreneau, proches } = publie ? proposer(h, trajet.date, sens) : { dansCreneau: [], proches: [] };
   const liste = dansCreneau.length ? dansCreneau : proches;
+  const absentes = publie ? sourcesAbsentes(h, trajet.date) : [];
   const choisi = trajet.train;
   const cleChoisi = choisi ? cleTrain({ sens, ...choisi }) : null;
   // Le train choisi est recherché dans tous les trains du jour (il peut être hors créneau).
@@ -168,13 +170,16 @@ function BlocTrajet(props: {
           chaque semaine.
         </p>
       )}
+      {publie && absentes.length > 0 && (
+        <p class="alerte">Horaires {absentes.join(', ')} pas encore publiés pour cette date : la liste peut être incomplète.</p>
+      )}
       {publie && liste.length === 0 && <p class="alerte">Aucun train direct ce jour-là dans les horaires publiés.</p>}
       {publie && liste.length > 0 && (
         <fieldset class="choix-train" aria-describedby={`${base}-creneau`}>
           <legend>Train {cote === 'aller' ? 'aller' : 'retour'}</legend>
           <p class="aide" id={`${base}-creneau`}>
             {dansCreneau.length
-              ? `Trains avec ${plage(cote)}, tous opérateurs.`
+              ? `Trains avec ${plage(cote)}, ${absentes.length ? 'opérateurs publiés' : 'tous opérateurs'}.`
               : `Aucun train avec ${plage(cote)} ce jour-là. Voici les plus proches.`}
           </p>
           {affiches.map((t) => {
@@ -532,6 +537,7 @@ export function Deplacements(props: {
             {h.sources.map((s) => (
               <li key={s.url}>
                 <ExternalLink href={s.url}>{s.nom}</ExternalLink>, {LICENCES[s.licence] ?? s.licence}
+                {s.fin && s.fin < h.fin && `, publiés jusqu’au ${dateLongue(s.fin)}`}
               </li>
             ))}
           </ul>
