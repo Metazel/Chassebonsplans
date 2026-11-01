@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite';
+import horaires from './static/horaires.json' with { type: 'json' };
 import { defineConfig } from 'vitest/config';
 import preact from '@preact/preset-vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
@@ -27,7 +28,8 @@ const CSP = [
 
 /** Service worker généré au build : met en cache la coquille de l'appli (fonctionnement hors ligne). */
 function serviceWorker(): Plugin {
-  const PUBLIC_FILES = ['manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+  // horaires.json : horaires théoriques régénérés à chaque publication (scripts/extraire_horaires.py).
+  const PUBLIC_FILES = ['manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'horaires.json'];
   return {
     name: 'chassebonsplans-sw',
     apply: 'build',
@@ -35,13 +37,15 @@ function serviceWorker(): Plugin {
       const files = ['./', './index.html', ...Object.keys(bundle).filter((f) => !f.endsWith('.map')).map((f) => `./${f}`), ...PUBLIC_FILES.map((f) => `./${f}`)];
       const unique = [...new Set(files)];
       let h = 2166136261;
-      for (const ch of unique.join('|')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+      // Le contenu des horaires entre dans la version : des horaires renouvelés installent un nouveau cache.
+      for (const ch of unique.join('|') + JSON.stringify(horaires)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
       const version = (h >>> 0).toString(36);
       const source = `/* Chasse aux bons plans — service worker généré au build. */
 const CACHE = 'chassebonsplans-${version}';
 const PRECACHE = ${JSON.stringify(unique)};
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  // cache: 'reload' : jamais la copie du cache HTTP (GitHub Pages la garde 10 min), sinon un ancien index.html ou d'anciens horaires.
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (event) => {
   event.waitUntil(

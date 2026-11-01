@@ -4,6 +4,7 @@ import brut from '../src/data/leviers.json';
 import { contientNumeroCarte, luhn } from '../src/domain/securite';
 import {
   FORMAT_EXPORT,
+  TAILLE_MAX_IMPORT,
   aujourdhuiIso,
   estDateIso,
   etatValidite,
@@ -134,7 +135,7 @@ describe('sauvegarde et restauration (EXG-04)', () => {
   it('messages lisibles pour un fichier invalide', () => {
     expect(() => importer('pas du json', IDS)).toThrow(/JSON invalide/);
     expect(() => importer('{"format":"autre"}', IDS)).toThrow(/pas une sauvegarde/);
-    expect(() => importer('x'.repeat(100_001), IDS)).toThrow(/volumineux/);
+    expect(() => importer('x'.repeat(TAILLE_MAX_IMPORT + 1), IDS)).toThrow(/volumineux/);
     expect(() => importer('{"format":"chassebonsplans-export","profil":{"version":9}}', IDS)).toThrow(/version non prise en charge/);
   });
 });

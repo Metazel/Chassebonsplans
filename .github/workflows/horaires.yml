@@ -1,0 +1,60 @@
+# Extraction des horaires Marseille Saint-Charles <-> Paris depuis les GTFS ouverts (SNCF, Trenitalia).
+# Essai : produit l'extrait en artefact et un résumé en annotation, sans publier.
+name: Horaires (extraction)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/extraire_horaires.py"
+      - ".github/workflows/horaires.yml"
+
+permissions: {}
+
+jobs:
+  extraire:
+    name: Extraire les horaires
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m unittest scripts/test_extraire_horaires.py
+      - id: extraction
+        run: |
+          if ! python scripts/extraire_horaires.py --sortie horaires.json > resume.json 2> erreur.txt; then
+            echo "::error title=Extraction::$(tail -c 900 erreur.txt | tr '\n' ' ' | sed 's/::/: :/g')"
+            exit 1
+          fi
+          echo "::notice title=Extraction horaires::$(cat resume.json)"
+          python - <<'PY'
+          import json
+          d = json.load(open("horaires.json"))
+          echo = lambda t: print("::notice title=" + t[0] + "::" + t[1])
+          echo(("Période", d["debut"] + " → " + d["fin"] + " ; sources : " + ", ".join(s["nom"] + " (" + str(s["licence"]) + ")" for s in d["sources"])))
+          def hm(m): return f"{m//60%24:02d}:{m%60:02d}"
+          for sens in ("MP", "PM"):
+              ex = [t for t in d["trains"] if t["s"] == sens][:14]
+              echo(("Exemples " + sens, " | ".join(f'{t["o"]} {t["n"]} {hm(t["d"])}→{hm(t["a"])} {t["gd"]}→{t["ga"]} ({len(t["j"])} j)' for t in ex)))
+          import os
+          from datetime import date, timedelta
+          base = date.fromisoformat(d["debut"])
+          jour = base + timedelta(days=(2 - base.weekday()) % 7 + 7)  # un mercredi dans 1 à 2 semaines
+          k = (jour - base).days
+          aller = sorted((t for t in d["trains"] if t["s"] == "MP" and k in t["j"] and 540 <= t["a"] <= 580), key=lambda t: t["a"])
+          retour = sorted((t for t in d["trains"] if t["s"] == "PM" and k in t["j"] and 1050 <= t["d"] <= 1200), key=lambda t: t["d"])
+          echo(("Aller " + jour.isoformat() + " arrivée 9h00-9h40", " | ".join(f'{t["o"]} {t["n"]} {hm(t["d"])}→{hm(t["a"])}' for t in aller) or "aucun"))
+          echo(("Retour " + jour.isoformat() + " départ 17h30-20h00", " | ".join(f'{t["o"]} {t["n"]} {hm(t["d"])}→{hm(t["a"])}' for t in retour) or "aucun"))
+          print("::notice title=Taille::" + str(os.path.getsize("horaires.json")) + " octets")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: horaires
+          path: horaires.json
+          retention-days: 7

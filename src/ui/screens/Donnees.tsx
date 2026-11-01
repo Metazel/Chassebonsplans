@@ -93,7 +93,7 @@ export function Donnees(props: {
 
       <section aria-labelledby="titre-sauver">
         <h2 id="titre-sauver">Sauvegarder</h2>
-        <p>Télécharge un fichier JSON avec vos leviers et vos réglages, à conserver ou à transférer sur un autre appareil.</p>
+        <p>Télécharge un fichier JSON avec vos leviers, vos réglages et vos déplacements, à conserver ou à transférer sur un autre appareil.</p>
         <p class="aide">
           {props.profil.derniereSauvegarde ? `Dernière sauvegarde : ${props.profil.derniereSauvegarde}.` : 'Aucune sauvegarde pour l’instant.'}
         </p>
@@ -107,7 +107,7 @@ export function Donnees(props: {
         <div class="champ">
           <label for="import">Choisir un fichier de sauvegarde (.json)</label>
           <span class="aide" id="import-aide">
-            Remplace vos leviers et réglages actuels.
+            Remplace vos leviers, réglages et déplacements actuels.
           </span>
           <input
             ref={fichier}
@@ -128,7 +128,7 @@ export function Donnees(props: {
 
       <section aria-labelledby="titre-effacer">
         <h2 id="titre-effacer">Tout effacer</h2>
-        <p>Supprime définitivement vos leviers et réglages de cet appareil, dans tous les onglets ouverts.</p>
+        <p>Supprime définitivement vos leviers, réglages et déplacements de cet appareil, dans tous les onglets ouverts.</p>
         {!confirmer ? (
           <button
             type="button"

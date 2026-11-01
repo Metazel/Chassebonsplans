@@ -6,20 +6,43 @@ import { CLE_ILLISIBLE, ouvrirStockage, stockageMemoire, type Stockage } from '.
 import { Comparateur, REGLAGES_DEFAUT, nouvelleLigne } from './screens/Comparateur';
 import { Leviers } from './screens/Leviers';
 import { Donnees } from './screens/Donnees';
+import { Deplacements, type EtatHoraires } from './screens/Deplacements';
+import { purger, type Deplacement } from '../domain/deplacements';
+import { lireReglages } from '../domain/saisie';
+import { REFERENTIEL_COUT } from '../data/parametres';
+import { chargerHoraires } from '../state/horaires';
 
-type Vue = 'comparer' | 'leviers' | 'donnees';
+type Vue = 'deplacements' | 'comparer' | 'leviers' | 'donnees';
 const VUES: { id: Vue; libelle: string; titre: string }[] = [
+  { id: 'deplacements', libelle: 'Mes déplacements', titre: 'Mes déplacements' },
   { id: 'comparer', libelle: 'Comparer', titre: 'Comparer mes trains' },
   { id: 'leviers', libelle: 'Mes leviers', titre: 'Mes leviers' },
   { id: 'donnees', libelle: 'Mes données', titre: 'Mes données' },
 ];
 const IDS = new Set(LEVIERS.map((l) => l.id));
 
-const lireVue = (h: string): Vue | null => (h === 'comparer' || h === 'leviers' || h === 'donnees' ? h : null);
-const vueDepuisHash = (): Vue => lireVue(location.hash.slice(1)) ?? 'comparer';
+const lireVue = (h: string): Vue | null => (VUES.some((v) => v.id === h) ? (h as Vue) : null);
+const vueDepuisHash = (): Vue => lireVue(location.hash.slice(1)) ?? 'deplacements';
 
 /** Relit et valide le profil stocké ; met de côté une copie brute de ce qui est illisible au lieu de l'écraser. */
-async function charger(s: Stockage): Promise<{ profil: Profil; alerte: string | null }> {
+async function charger(s: Stockage, aujourdhui: string): Promise<{ profil: Profil; alerte: string | null }> {
+  const lu = await lireStocke(s);
+  // EXG-03 : les déplacements terminés depuis plus de 24 mois sont effacés à l'ouverture.
+  const liste = lu.profil.deplacements;
+  if (liste) {
+    const gardes = purger(liste, aujourdhui);
+    if (gardes.length !== liste.length) {
+      const profil: Profil = { ...lu.profil };
+      if (gardes.length) profil.deplacements = gardes;
+      else delete profil.deplacements;
+      await s.ecrire(pourStockage(profil)).catch(() => undefined);
+      return { ...lu, profil };
+    }
+  }
+  return lu;
+}
+
+async function lireStocke(s: Stockage): Promise<{ profil: Profil; alerte: string | null }> {
   const brut = await s.lire();
   if (brut === null || brut === undefined) return { profil: profilVide(), alerte: null };
   try {
@@ -44,6 +67,18 @@ export function App() {
   const [lignes, setLignesEtat] = useState<LigneTrain[]>(() => [nouvelleLigne(), nouvelleLigne()]);
   const premiereVue = useRef(true);
   const aujourdhui = aujourdhuiIso();
+  const [horaires, setHoraires] = useState<EtatHoraires>({ etat: 'chargement' });
+
+  useEffect(() => {
+    let actif = true;
+    chargerHoraires().then(
+      (h) => actif && setHoraires({ etat: 'ok', horaires: h }),
+      () => actif && setHoraires({ etat: 'erreur' }),
+    );
+    return () => {
+      actif = false;
+    };
+  }, []);
 
   const appliquer = (p: Profil) => {
     profilRef.current = p;
@@ -56,7 +91,7 @@ export function App() {
     let detacher = () => undefined as void;
     void (async () => {
       const s = await ouvrirStockage().catch(() => stockageMemoire());
-      const { profil: p, alerte } = await charger(s).catch(() => ({ profil: profilVide(), alerte: 'Lecture des données impossible.' }));
+      const { profil: p, alerte } = await charger(s, aujourdhuiIso()).catch(() => ({ profil: profilVide(), alerte: 'Lecture des données impossible.' }));
       if (!actif) return;
       appliquer(p);
       setReglagesEtat(p.reglages ?? REGLAGES_DEFAUT);
@@ -64,7 +99,7 @@ export function App() {
       setStockage(s);
       // Un autre onglet a modifié les données (dont une suppression) : on relit.
       detacher = s.surChangementExterne(() => {
-        void charger(s).then(({ profil: q }) => {
+        void lireStocke(s).then(({ profil: q }) => {
           if (!actif) return;
           appliquer(q);
           setReglagesEtat(q.reglages ?? REGLAGES_DEFAUT);
@@ -128,6 +163,14 @@ export function App() {
     void enregistrer({ ...profilRef.current, leviers });
   };
 
+  const setDeplacements = (liste: Deplacement[]) => {
+    const p: Profil = { ...profilRef.current };
+    if (liste.length) p.deplacements = liste;
+    else delete p.deplacements;
+    void enregistrer(p);
+  };
+  const parametres = lireReglages(reglages).parametres ?? REFERENTIEL_COUT.parametres;
+
   const detenus = LEVIERS.filter((l) => profil.leviers[l.id]?.detenu);
   const expires = detenus.filter((l) => {
     const fin = profil.leviers[l.id]?.finValidite;
@@ -190,6 +233,9 @@ export function App() {
             Chargement de vos données…
           </p>
         )}
+        {stockage && vue === 'deplacements' && (
+          <Deplacements deplacements={profil.deplacements ?? []} horaires={horaires} parametres={parametres} aujourdhui={aujourdhui} onChange={setDeplacements} />
+        )}
         {stockage && vue === 'comparer' && <Comparateur lignes={lignes} setLignes={setLignesEtat} reglages={reglages} setReglages={setReglages} resumeLeviers={resumeLeviers} />}
         {stockage && vue === 'leviers' && <Leviers profil={profil} aujourdhui={aujourdhui} onChange={setLevier} />}
         {stockage && vue === 'donnees' && (
@@ -200,7 +246,12 @@ export function App() {
             onExporte={() => void enregistrer({ ...profilRef.current, derniereSauvegarde: aujourdhui })}
             onImporte={(p) => {
               setReglagesEtat(p.reglages ?? REGLAGES_DEFAUT);
-              return enregistrer({ ...p, derniereSauvegarde: aujourdhui });
+              // EXG-03 : une sauvegarde ancienne ne réintroduit pas de déplacements de plus de 24 mois.
+              const restaure: Profil = { ...p, derniereSauvegarde: aujourdhui };
+              const gardes = purger(p.deplacements ?? [], aujourdhui);
+              if (gardes.length) restaure.deplacements = gardes;
+              else delete restaure.deplacements;
+              return enregistrer(restaure);
             }}
             onSupprime={() => {
               appliquer(profilVide());
