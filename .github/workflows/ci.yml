@@ -2,9 +2,9 @@
 # Même chaîne que ParcPilote.
 #
 #   verify  : types, lint, tests unitaires, audit npm
-#   build   : PWA (dist/) et fichier unique (dist-single/) ; prépare l'artefact Pages sur main
+#   build   : horaires réels (GTFS ouverts), PWA (dist/) et fichier unique (dist-single/) ; prépare l'artefact Pages sur main
 #   e2e     : scénarios Playwright (métier et RGAA), captures en artefact
-#   deploy  : publication GitHub Pages (push ou lancement manuel sur main uniquement)
+#   deploy  : publication GitHub Pages (push, lancement manuel ou rafraîchissement hebdomadaire, sur main uniquement)
 #
 # Pas de contournement : la recette navigateur est obligatoire pour publier.
 #
@@ -19,7 +19,8 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    # Chaque lundi à 5 h 17 UTC (6 h 17 l'hiver, 7 h 17 l'été à Paris) : rejoue l'audit des dépendances, sans publier.
+    # Chaque lundi à 5 h 17 UTC (6 h 17 l'hiver, 7 h 17 l'été à Paris) : audit des dépendances,
+    # horaires à jour et republication si toute la chaîne est verte (sinon la version en ligne reste).
     - cron: "17 5 * * 1"
 
 permissions: {}
@@ -65,6 +66,36 @@ jobs:
         with:
           node-version-file: .nvmrc
       - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - run: python -m unittest scripts/test_extraire_horaires.py
+      # Horaires réels Marseille Saint-Charles <-> Paris (SNCF, Trenitalia) depuis transport.data.gouv.fr.
+      # Sur une PR, une source indisponible n'empêche pas la vérification : l'échantillon versionné est gardé.
+      # Sur main, pas d'horaires réels et récents = pas de publication (la version en ligne reste).
+      - name: Extraire les horaires
+        env:
+          EVENEMENT: ${{ github.event_name }}
+        run: |
+          if python scripts/extraire_horaires.py --sortie horaires-extraits.json > resume.json 2> erreur.txt \
+             && python - <<'PY'
+          import json, sys
+          from datetime import date, timedelta
+          d = json.load(open("horaires-extraits.json"))
+          sens = {t["s"] for t in d["trains"]}
+          ok = sens == {"MP", "PM"} and date.fromisoformat(d["fin"]) >= date.today() + timedelta(days=56) and date.fromisoformat(d["debut"]) <= date.today()
+          print(f"période {d['debut']} → {d['fin']}, {len(d['trains'])} trains, sens {sorted(sens)}")
+          sys.exit(0 if ok else 1)
+          PY
+          then
+            mv horaires-extraits.json static/horaires.json
+            echo "::notice title=Horaires publiés::$(cat resume.json | tr '\n' ' ')"
+          elif [ "$EVENEMENT" = "pull_request" ]; then
+            echo "::notice title=Horaires::source indisponible, échantillon versionné conservé pour cette vérification"
+          else
+            echo "::error title=Horaires::extraction impossible ou incomplète : $(tail -c 600 erreur.txt | tr '\n' ' ' | sed 's/::/: :/g')"
+            exit 1
+          fi
       - run: npm run build
       - run: npm run build:single
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -77,7 +108,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Préparer l'artefact GitHub Pages
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist
@@ -120,7 +151,7 @@ jobs:
       && needs.build.result == 'success'
       && needs.e2e.result == 'success'
       && github.ref == 'refs/heads/main'
-      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
