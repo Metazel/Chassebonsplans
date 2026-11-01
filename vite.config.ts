@@ -44,7 +44,8 @@ function serviceWorker(): Plugin {
 const CACHE = 'chassebonsplans-${version}';
 const PRECACHE = ${JSON.stringify(unique)};
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE)).then(() => self.skipWaiting()));
+  // cache: 'reload' : jamais la copie du cache HTTP (GitHub Pages la garde 10 min), sinon un ancien index.html ou d'anciens horaires.
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(PRECACHE.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', (event) => {
   event.waitUntil(

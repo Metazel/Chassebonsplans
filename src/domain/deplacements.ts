@@ -24,7 +24,7 @@ export interface Trajet {
   statut: Statut;
   /** Date limite de paiement d'une option posée. */
   limiteOption?: string;
-  /** Prix payé, en centimes (facultatif). */
+  /** Prix du billet, en centimes (facultatif ; compté dans le total une fois payé). */
   prixCentimes?: number;
 }
 
@@ -77,7 +77,8 @@ function lireTrajet(v: unknown): Trajet | null {
   const trajet: Trajet = { date: t.date, statut: t.statut as Statut };
   const train = lireTrain(t.train);
   if (train) trajet.train = train;
-  if (t.statut === 'option' && estDateIso(t.limiteOption)) trajet.limiteOption = t.limiteOption;
+  // La date limite d'une option ne peut pas dépasser le jour du trajet.
+  if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;
   return trajet;
 }

@@ -13,7 +13,7 @@ import {
   verifierDates,
   type Deplacement,
 } from '../src/domain/deplacements';
-import { genererIcs, plier } from '../src/domain/ics';
+import { aExporter, genererIcs, plier } from '../src/domain/ics';
 import { LEVIERS } from '../src/data/leviers';
 import { exporter, importer, lireProfil, pourStockage, profilVide } from '../src/domain/profil';
 
@@ -78,6 +78,11 @@ describe('relecture validée (stockage, import)', () => {
     ]).deplacements;
     expect(lu?.aller.train).toBeUndefined();
     expect(lu?.retour.train).toBeUndefined();
+  });
+  it('date limite d’option après le trajet : écartée', () => {
+    const d = dep('d-abcd', '2026-11-02', '2026-11-04');
+    const [lu] = lireDeplacements([{ ...d, aller: { date: '2026-11-02', statut: 'option', limiteOption: '2026-11-03' } }]).deplacements;
+    expect(lu?.aller).toEqual({ date: '2026-11-02', statut: 'option' });
   });
   it('date limite d’option conservée seulement au statut « option » ; prix borné', () => {
     const d = dep('d-abcd', '2026-11-02', '2026-11-04');
@@ -151,8 +156,9 @@ describe('export agenda .ics (RFC 5545)', () => {
     expect(ics).toContain('DTEND;TZID=Europe/Paris:20261102T092200');
     expect(ics).toContain('DTSTART;TZID=Europe/Paris:20261104T193800');
     expect(ics).toContain('UID:d-abcd-aller-option@chassebonsplans');
-    expect(ics).toContain('TRIGGER:-P1D');
+    expect(ics).toContain('TRIGGER:-PT15H'); // la veille vers 9 h, pas à minuit
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(3);
+    expect(ics).toContain('SUMMARY:(À réserver) Train Paris → Marseille');
   });
   it('arrivée après minuit : fin d’événement le lendemain', () => {
     const tard = genererIcs([{ ...d, retour: { ...d.retour, train: { ...train, depart: 1200, arrivee: 1450 } } }]);
@@ -162,7 +168,16 @@ describe('export agenda .ics (RFC 5545)', () => {
     expect(plier('X'.repeat(160)).split('\r\n').map((l) => l.length)).toEqual([75, 75, 12]);
     expect(genererIcs([{ ...d, aller: { ...d.aller, train: { ...train, operateur: 'A, B; C' } } }]).replace(/\r\n /g, '')).toContain('A\\, B\\; C');
   });
-  it('aucun événement sans train choisi', () => {
-    expect(genererIcs([dep('d-zzzz', '2026-11-02', '2026-11-04')])).not.toContain('BEGIN:VEVENT');
+  it('aucun événement sans train choisi ni option ; rappel d’option gardé sans train', () => {
+    const vide = dep('d-zzzz', '2026-11-02', '2026-11-04');
+    expect(aExporter(vide)).toBe(false);
+    expect(genererIcs([vide])).not.toContain('BEGIN:VEVENT');
+    const option = { ...vide, aller: { date: '2026-11-02', statut: 'option' as const, limiteOption: '2026-11-01' } };
+    expect(aExporter(option)).toBe(true);
+    expect(genererIcs([option])).toContain('UID:d-zzzz-aller-option@chassebonsplans');
+  });
+  it('un export plus récent porte une séquence plus grande (mise à jour, pas doublon)', () => {
+    const seq = (t: string) => Number(/SEQUENCE:(\d+)/.exec(genererIcs([d], new Date(t)))?.[1]);
+    expect(seq('2026-11-02T10:00:00Z')).toBeGreaterThan(seq('2026-11-01T10:00:00Z'));
   });
 });

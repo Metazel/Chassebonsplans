@@ -57,44 +57,54 @@ function horodatage(date: string, minutes: number): string {
 
 const jourEntier = (date: string) => date.replace(/-/g, '');
 
-function evenementTrajet(d: Deplacement, cote: 'aller' | 'retour', t: Trajet, stamp: string): string[] {
+const STATUT_ICS = { 'a-reserver': 'à réserver', option: 'option posée', paye: 'payé' } as const;
+
+function evenementTrajet(d: Deplacement, cote: 'aller' | 'retour', t: Trajet, stamp: string, sequence: number): string[] {
   if (!t.train) return [];
-  const titre = cote === 'aller' ? 'Train Marseille → Paris' : 'Train Paris → Marseille';
+  const titre = `${t.statut === 'a-reserver' ? '(À réserver) ' : ''}Train ${cote === 'aller' ? 'Marseille → Paris' : 'Paris → Marseille'}`;
   return [
     'BEGIN:VEVENT',
     `UID:${d.id}-${cote}@chassebonsplans`,
     `DTSTAMP:${stamp}`,
+    `SEQUENCE:${sequence}`,
     `DTSTART;TZID=Europe/Paris:${horodatage(t.date, t.train.depart)}`,
     `DTEND;TZID=Europe/Paris:${horodatage(t.date, t.train.arrivee)}`,
     `SUMMARY:${echapper(`${titre} — ${t.train.operateur} ${t.train.numero}`)}`,
-    `DESCRIPTION:${echapper(`Statut : ${t.statut === 'paye' ? 'payé' : t.statut === 'option' ? 'option posée' : 'à réserver'}. Horaire théorique, à vérifier sur le billet.`)}`,
+    `DESCRIPTION:${echapper(`Statut : ${STATUT_ICS[t.statut]}. Horaire théorique, à vérifier sur le billet.`)}`,
     'END:VEVENT',
   ];
 }
 
-function rappelOption(d: Deplacement, cote: 'aller' | 'retour', t: Trajet, stamp: string): string[] {
+function rappelOption(d: Deplacement, cote: 'aller' | 'retour', t: Trajet, stamp: string, sequence: number): string[] {
   if (t.statut !== 'option' || !t.limiteOption) return [];
   return [
     'BEGIN:VEVENT',
     `UID:${d.id}-${cote}-option@chassebonsplans`,
     `DTSTAMP:${stamp}`,
+    `SEQUENCE:${sequence}`,
     `DTSTART;VALUE=DATE:${jourEntier(t.limiteOption)}`,
     `SUMMARY:${echapper(`Payer l’option du train du ${t.date}${t.train ? ` (${t.train.numero})` : ''}`)}`,
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
     'DESCRIPTION:Option à payer avant la date limite',
-    'TRIGGER:-P1D',
+    // Événement « journée entière » : -PT15H sonne la veille vers 9 h (et non à minuit).
+    'TRIGGER:-PT15H',
     'END:VALARM',
     'END:VEVENT',
   ];
 }
 
+/** Déplacements qui produisent au moins un événement (train choisi ou option datée). */
+export const aExporter = (d: Deplacement) => [d.aller, d.retour].some((t) => t.train || (t.statut === 'option' && t.limiteOption));
+
 export function genererIcs(liste: Deplacement[], maintenant = new Date()): string {
   const stamp = maintenant.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  // Croissant à chaque export : un nouvel export met à jour les événements au lieu de les dupliquer.
+  const sequence = Math.floor(maintenant.getTime() / 60_000);
   const lignes = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Chasse aux bons plans//FR', 'CALSCALE:GREGORIAN', ...VTIMEZONE];
   for (const d of liste) {
     for (const cote of ['aller', 'retour'] as const) {
-      lignes.push(...evenementTrajet(d, cote, d[cote], stamp), ...rappelOption(d, cote, d[cote], stamp));
+      lignes.push(...evenementTrajet(d, cote, d[cote], stamp, sequence), ...rappelOption(d, cote, d[cote], stamp, sequence));
     }
   }
   lignes.push('END:VCALENDAR');

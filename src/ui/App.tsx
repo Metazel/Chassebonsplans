@@ -246,7 +246,12 @@ export function App() {
             onExporte={() => void enregistrer({ ...profilRef.current, derniereSauvegarde: aujourdhui })}
             onImporte={(p) => {
               setReglagesEtat(p.reglages ?? REGLAGES_DEFAUT);
-              return enregistrer({ ...p, derniereSauvegarde: aujourdhui });
+              // EXG-03 : une sauvegarde ancienne ne réintroduit pas de déplacements de plus de 24 mois.
+              const restaure: Profil = { ...p, derniereSauvegarde: aujourdhui };
+              const gardes = purger(p.deplacements ?? [], aujourdhui);
+              if (gardes.length) restaure.deplacements = gardes;
+              else delete restaure.deplacements;
+              return enregistrer(restaure);
             }}
             onSupprime={() => {
               appliquer(profilVide());

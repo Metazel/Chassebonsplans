@@ -4,8 +4,10 @@ import { dateCourte, dateLongue } from '../../domain/dates';
 import { formaterHeure } from '../../domain/heure';
 import { formaterMontant } from '../../domain/argent';
 import {
+  AGE_MAX_HORAIRES,
   CRENEAUX,
   GARES,
+  ageHoraires,
   arriveeDomicile,
   canalVente,
   cleTrain,
@@ -34,7 +36,7 @@ import {
   type Statut,
   type Trajet,
 } from '../../domain/deplacements';
-import { genererIcs } from '../../domain/ics';
+import { aExporter, genererIcs } from '../../domain/ics';
 import { ExternalLink } from '../components/ExternalLink';
 
 export type EtatHoraires = { etat: 'chargement' } | { etat: 'ok'; horaires: Horaires } | { etat: 'erreur' };
@@ -98,14 +100,21 @@ function BlocTrajet(props: {
   cote: Cote;
   horaires: EtatHoraires;
   p: ParametresCout;
+  aujourdhui: string;
   onTrajet: (t: Trajet) => void;
 }) {
   const { d, cote, p } = props;
   const trajet = d[cote];
   const sens = sensDu(cote);
   const base = `${d.id}-${cote}`;
-  const [prix, setPrix] = useState(trajet.prixCentimes !== undefined ? String(trajet.prixCentimes / 100).replace('.', ',') : '');
+  const prixTexte = (c: number | undefined) => (c !== undefined ? formaterMontant(c).replace(/\s?€/, '').replace(/\s/g, '') : '');
+  const [prix, setPrix] = useState(prixTexte(trajet.prixCentimes));
   const [copie, setCopie] = useState<'ok' | 'echec' | null>(null);
+  // Le champ suit le prix enregistré quand il change ailleurs (autre onglet, restauration).
+  useEffect(() => {
+    const lu = lirePrix(prix);
+    if (lu !== null && lu !== trajet.prixCentimes) setPrix(prixTexte(trajet.prixCentimes));
+  }, [trajet.prixCentimes]);
   const h = props.horaires.etat === 'ok' ? props.horaires.horaires : null;
   const publie = h !== null && couvre(h, trajet.date);
   const { dansCreneau, proches } = publie ? proposer(h, trajet.date, sens) : { dansCreneau: [], proches: [] };
@@ -124,6 +133,8 @@ function BlocTrajet(props: {
       )
     : null;
   const canal = choisi ? canalVente(choisi.operateur) : null;
+  // Le message « copiée » ne vaut que pour la recherche affichée.
+  useEffect(() => setCopie(null), [recherche]);
 
   const copier = async () => {
     if (!recherche) return;
@@ -139,7 +150,7 @@ function BlocTrajet(props: {
     const t: Trajet = { date: trajet.date, statut };
     if (trajet.train) t.train = trajet.train;
     if (statut === 'option' && trajet.limiteOption) t.limiteOption = trajet.limiteOption;
-    if (statut === 'paye' && trajet.prixCentimes !== undefined) t.prixCentimes = trajet.prixCentimes;
+    if (trajet.prixCentimes !== undefined) t.prixCentimes = trajet.prixCentimes;
     props.onTrajet(t);
   };
 
@@ -150,7 +161,8 @@ function BlocTrajet(props: {
       </h3>
       {props.horaires.etat === 'chargement' && <p class="aide">Chargement des horaires…</p>}
       {props.horaires.etat === 'erreur' && <p class="alerte">Horaires indisponibles : choisissez votre train directement sur le site de vente.</p>}
-      {h && !publie && (
+      {h && !publie && trajet.date < h.debut && trajet.date >= props.aujourdhui && <p class="aide">Horaires non disponibles pour cette date.</p>}
+      {h && !publie && trajet.date > h.fin && (
         <p class="alerte">
           Horaires pas encore publiés pour cette date (connus du {dateCourte(h.debut)} au {dateCourte(h.fin)}). Revenez plus tard : ils sont mis à jour
           chaque semaine.
@@ -208,7 +220,9 @@ function BlocTrajet(props: {
       )}
       <div class="ligne suivi">
         <div class="champ">
-          <label for={`${base}-statut`}>Réservation</label>
+          <label for={`${base}-statut`}>
+            Réservation<span class="sr-only"> {cote === 'aller' ? 'aller' : 'retour'} du {dateCourte(trajet.date)}</span>
+          </label>
           <select id={`${base}-statut`} value={trajet.statut} onChange={(e) => changerStatut((e.currentTarget as HTMLSelectElement).value as Statut)}>
             {STATUTS.map((s) => (
               <option key={s} value={s}>
@@ -274,6 +288,7 @@ function CarteDeplacement(props: {
   d: Deplacement;
   horaires: EtatHoraires;
   p: ParametresCout;
+  aujourdhui: string;
   onChange: (d: Deplacement) => void;
   onSupprimer: () => void;
 }) {
@@ -300,7 +315,7 @@ function CarteDeplacement(props: {
           {total > 0 && ` Total payé : ${formaterMontant(total)}.`}
         </p>
         {(['aller', 'retour'] as const).map((cote) => (
-          <BlocTrajet key={cote} d={d} cote={cote} horaires={props.horaires} p={props.p} onTrajet={(t) => props.onChange({ ...d, [cote]: t })} />
+          <BlocTrajet key={cote} d={d} cote={cote} horaires={props.horaires} p={props.p} aujourdhui={props.aujourdhui} onTrajet={(t) => props.onChange({ ...d, [cote]: t })} />
         ))}
         {!confirmer ? (
           <button
@@ -348,7 +363,7 @@ export function Deplacements(props: {
   const { deplacements, aujourdhui } = props;
   const [aller, setAller] = useState('');
   const [retour, setRetour] = useState('');
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<{ texte: string; champ: 'aller' | 'retour' } | null>(null);
   const [annonce, setAnnonce] = useState('');
   const focusApres = useRef<string | null>(null);
   const h = props.horaires.etat === 'ok' ? props.horaires.horaires : null;
@@ -366,8 +381,9 @@ export function Deplacements(props: {
     if (!err && aller < aujourdhui) err = 'Le déplacement doit commencer aujourd’hui ou plus tard.';
     if (!err && deplacements.length >= MAX_DEPLACEMENTS) err = `${MAX_DEPLACEMENTS} déplacements au plus : supprimez-en d’anciens.`;
     if (err) {
-      setErreur(err);
-      focusApres.current = err.includes('retour') ? 'nouveau-retour' : 'nouveau-aller';
+      const champ = err.includes('retour') ? 'retour' : 'aller';
+      setErreur({ texte: err, champ });
+      focusApres.current = `nouveau-${champ}`;
       return;
     }
     const d: Deplacement = { ...nouveauDeplacement(nouvelId(), aller, retour), aller: preselection(h, aller, 'aller'), retour: preselection(h, retour, 'retour') };
@@ -382,7 +398,8 @@ export function Deplacements(props: {
   const aVenir = deplacements.filter((d) => d.retour.date >= aujourdhui);
   const passes = deplacements.filter((d) => d.retour.date < aujourdhui);
   const urgentes = optionsUrgentes(deplacements, aujourdhui);
-  const avecTrain = aVenir.filter((d) => d.aller.train || d.retour.train);
+  const avecTrain = aVenir.filter(aExporter);
+  const age = h ? ageHoraires(h, aujourdhui) : 0;
 
   const maj = (d: Deplacement) => props.onChange(deplacements.map((x) => (x.id === d.id ? d : x)));
   const retirer = (d: Deplacement) => {
@@ -391,16 +408,16 @@ export function Deplacements(props: {
     props.onChange(deplacements.filter((x) => x.id !== d.id));
   };
 
-  const champDate = (id: string, libelle: string, valeur: string, set: (v: string) => void, min: string) => (
+  const champDate = (champ: 'aller' | 'retour', libelle: string, valeur: string, set: (v: string) => void, min: string) => (
     <div class="champ">
-      <label for={id}>{libelle}</label>
+      <label for={`nouveau-${champ}`}>{libelle}</label>
       <input
-        id={id}
+        id={`nouveau-${champ}`}
         type="date"
         value={valeur}
         min={min}
-        aria-invalid={erreur ? 'true' : undefined}
-        aria-describedby={erreur ? 'nouveau-err' : undefined}
+        aria-invalid={erreur?.champ === champ ? 'true' : undefined}
+        aria-describedby={erreur?.champ === champ ? 'nouveau-err' : undefined}
         onInput={(e) => set((e.currentTarget as HTMLInputElement).value)}
       />
     </div>
@@ -415,6 +432,18 @@ export function Deplacements(props: {
         Indiquez vos jours à Paris : l’outil liste les trains de vos créneaux, tous opérateurs, et prépare votre réservation. Vous réservez ensuite sur le
         site de vente ; rien n’est réservé ni payé ici.
       </p>
+      {h && age > AGE_MAX_HORAIRES && (
+        <p class="alerte" role="status">
+          Horaires mis à jour il y a {age} jours : ils ont pu changer. Vérifiez sur le site de vente.
+        </p>
+      )}
+      {h && h.ecartes > 0 && (
+        <p class="alerte" role="status">
+          {h.ecartes > 1
+            ? `${h.ecartes} trains illisibles dans les horaires publiés ont été écartés : vérifiez sur le site de vente.`
+            : 'Un train illisible dans les horaires publiés a été écarté : vérifiez sur le site de vente.'}
+        </p>
+      )}
       <p class="sr-only" aria-live="polite">
         {annonce}
       </p>
@@ -422,7 +451,11 @@ export function Deplacements(props: {
         <ul class="avertissements" aria-label="Options à payer">
           {urgentes.map(({ deplacement: d, cote }) => (
             <li key={`${d.id}-${cote}`}>
-              {finPhrase(`Option ${cote} du ${dateCourte(d[cote].date)} à payer avant le ${dateCourte(d[cote].limiteOption ?? d[cote].date)}`)}
+              {finPhrase(
+                (d[cote].limiteOption ?? d[cote].date) < aujourdhui
+                  ? `Option ${cote} du ${dateCourte(d[cote].date)} expirée le ${dateCourte(d[cote].limiteOption ?? d[cote].date)} : vérifiez votre réservation`
+                  : `Option ${cote} du ${dateCourte(d[cote].date)} à payer avant le ${dateCourte(d[cote].limiteOption ?? d[cote].date)}`,
+              )}
             </li>
           ))}
         </ul>
@@ -432,12 +465,12 @@ export function Deplacements(props: {
         <h2 id="titre-ajout">Ajouter un déplacement</h2>
         <form class="ajout" onSubmit={ajouter} noValidate>
           <div class="ligne">
-            {champDate('nouveau-aller', 'Aller (Marseille → Paris) le', aller, setAller, aujourdhui)}
-            {champDate('nouveau-retour', 'Retour (Paris → Marseille) le', retour, setRetour, aller || aujourdhui)}
+            {champDate('aller', 'Aller (Marseille → Paris) le', aller, setAller, aujourdhui)}
+            {champDate('retour', 'Retour (Paris → Marseille) le', retour, setRetour, aller || aujourdhui)}
           </div>
           {erreur && (
             <p class="erreur" id="nouveau-err">
-              {erreur}
+              {erreur.texte}
             </p>
           )}
           <button type="submit">Ajouter ce déplacement</button>
@@ -453,7 +486,7 @@ export function Deplacements(props: {
         ) : (
           <ul class="deplacements">
             {aVenir.map((d) => (
-              <CarteDeplacement key={d.id} d={d} horaires={props.horaires} p={props.parametres} onChange={maj} onSupprimer={() => retirer(d)} />
+              <CarteDeplacement key={d.id} d={d} horaires={props.horaires} p={props.parametres} aujourdhui={aujourdhui} onChange={maj} onSupprimer={() => retirer(d)} />
             ))}
           </ul>
         )}
@@ -481,7 +514,7 @@ export function Deplacements(props: {
             <p class="aide">Conservés 24 mois, puis effacés automatiquement.</p>
             <ul class="deplacements">
               {passes.map((d) => (
-                <CarteDeplacement key={d.id} d={d} horaires={props.horaires} p={props.parametres} onChange={maj} onSupprimer={() => retirer(d)} />
+                <CarteDeplacement key={d.id} d={d} horaires={props.horaires} p={props.parametres} aujourdhui={aujourdhui} onChange={maj} onSupprimer={() => retirer(d)} />
               ))}
             </ul>
           </details>

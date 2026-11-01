@@ -2,7 +2,7 @@
  * Horaires théoriques Marseille Saint-Charles ↔ Paris, extraits des GTFS ouverts (SNCF, Trenitalia).
  * Fichier compact produit par scripts/extraire_horaires.py ; tout ce qui est relu est validé.
  */
-import { formaterHeure } from './heure';
+import { MINUTES_PAR_JOUR, formaterHeure } from './heure';
 import { dateLongue, ecartJours, estDateIso } from './dates';
 import { evaluer, type ParametresCout } from './coutComplet';
 import { contientNumeroCarte } from './securite';
@@ -34,6 +34,8 @@ export interface Horaires {
   genereLe: string;
   sources: SourceHoraires[];
   trains: TrainHoraire[];
+  /** Trains écartés à la lecture car invalides. */
+  ecartes: number;
 }
 
 const texte = (v: unknown, max: number): string => {
@@ -45,19 +47,14 @@ const minutes = (v: unknown): number => {
   return v;
 };
 
-export function validerHoraires(src: unknown): Horaires {
-  const r = src as Record<string, unknown> | null;
-  if (!r || r.version !== 1) throw new Error('Horaires invalides : version');
-  for (const cle of ['debut', 'fin', 'genereLe'] as const) {
-    if (!estDateIso(r[cle])) throw new Error(`Horaires invalides : ${cle}`);
-  }
-  if (!Array.isArray(r.sources) || !Array.isArray(r.trains) || r.trains.length > 5000) throw new Error('Horaires invalides');
-  const trains = r.trains.map((t: Record<string, unknown>): TrainHoraire => {
-    if (t.s !== 'MP' && t.s !== 'PM') throw new Error('Horaires invalides : sens');
-    if (!Array.isArray(t.j) || t.j.length > 400 || !t.j.every((j) => Number.isInteger(j) && j >= 0 && j < 400)) throw new Error('Horaires invalides : jours');
+/** Lit un train ; null si une seule de ses données est invalide (le train est alors écarté, pas tout le fichier). */
+function lireTrain(t: Record<string, unknown> | null): TrainHoraire | null {
+  try {
+    if (!t || (t.s !== 'MP' && t.s !== 'PM')) return null;
+    if (!Array.isArray(t.j) || t.j.length > 400 || !t.j.every((j) => Number.isInteger(j) && j >= 0 && j < 400)) return null;
     const depart = minutes(t.d);
     const arrivee = minutes(t.a);
-    if (arrivee <= depart) throw new Error('Horaires invalides : arrivée avant départ');
+    if (arrivee <= depart) return null;
     return {
       sens: t.s,
       numero: texte(t.n, 12),
@@ -68,15 +65,40 @@ export function validerHoraires(src: unknown): Horaires {
       arrivee,
       jours: new Set(t.j as number[]),
     };
-  });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Valide le fichier publié. Une structure invalide (version, dates, sources) rejette le fichier ;
+ * un train invalide est seulement écarté et compté dans `ecartes`.
+ */
+export function validerHoraires(src: unknown): Horaires {
+  const r = src as Record<string, unknown> | null;
+  if (!r || r.version !== 1) throw new Error('Horaires invalides : version');
+  for (const cle of ['debut', 'fin', 'genereLe'] as const) {
+    if (!estDateIso(r[cle])) throw new Error(`Horaires invalides : ${cle}`);
+  }
+  if (!Array.isArray(r.sources) || !Array.isArray(r.trains) || r.trains.length > 5000) throw new Error('Horaires invalides');
   if ((r.fin as string) < (r.debut as string)) throw new Error('Horaires invalides : période');
-  const sources = r.sources.map((s: Record<string, unknown>) => ({ nom: texte(s.nom, 120), url: texte(s.url, 200), licence: texte(s.licence, 40) }));
-  return { debut: r.debut as string, fin: r.fin as string, genereLe: r.genereLe as string, sources, trains };
+  const lus = r.trains.map((t) => lireTrain(t as Record<string, unknown> | null));
+  const trains = lus.filter((t): t is TrainHoraire => t !== null);
+  const sources = r.sources.map((s: Record<string, unknown>) => {
+    const url = texte(s.url, 200);
+    if (!url.startsWith('https://')) throw new Error('Horaires invalides : source');
+    return { nom: texte(s.nom, 120), url, licence: texte(s.licence, 40) };
+  });
+  return { debut: r.debut as string, fin: r.fin as string, genereLe: r.genereLe as string, sources, trains, ecartes: lus.length - trains.length };
 }
 
 export function couvre(h: Horaires, date: string): boolean {
   return date >= h.debut && date <= h.fin;
 }
+
+/** Âge des horaires publiés, en jours ; au-delà de 14 jours l'appli le signale (publication hebdomadaire). */
+export const AGE_MAX_HORAIRES = 14;
+export const ageHoraires = (h: Horaires, aujourdhui: string) => ecartJours(h.genereLe, aujourdhui);
 
 /** Trains circulant ce jour-là dans ce sens, triés par heure de départ. */
 export function trainsDuJour(h: Horaires, date: string, sens: Sens): TrainHoraire[] {
@@ -104,7 +126,8 @@ export interface Propositions {
 }
 
 export function proposer(h: Horaires, date: string, sens: Sens, creneau: Creneau = CRENEAUX[sens]): Propositions {
-  const jour = trainsDuJour(h, date, sens);
+  // Trains du jour même seulement : un train de nuit (arrivée le lendemain) ne répond à aucun créneau de la journée.
+  const jour = trainsDuJour(h, date, sens).filter((t) => t.depart < MINUTES_PAR_JOUR && (creneau.porte === 'depart' || t.arrivee < MINUTES_PAR_JOUR));
   const cle = (t: TrainHoraire) => (creneau.porte === 'arrivee' ? t.arrivee : t.depart);
   const dansCreneau = jour.filter((t) => cle(t) >= creneau.de && cle(t) <= creneau.a);
   if (dansCreneau.length) return { dansCreneau, proches: [] };

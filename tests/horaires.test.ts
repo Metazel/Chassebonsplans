@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import brut from '../static/horaires.json';
 import { REFERENTIEL_COUT } from '../src/data/parametres';
 import {
+  AGE_MAX_HORAIRES,
   CRENEAUX,
+  ageHoraires,
   canalVente,
   cleTrain,
   couvre,
@@ -40,15 +42,24 @@ describe('validation des horaires publiés', () => {
     ['version inconnue', { ...brut, version: 2 }],
     ['date impossible', { ...brut, debut: '2026-02-30' }],
     ['période inversée', { ...brut, debut: '2027-02-01' }],
-    ['sens inconnu', { ...brut, trains: [{ ...brut.trains[0], s: 'XX' }] }],
-    ['arrivée avant départ', { ...brut, trains: [{ ...brut.trains[0], d: 600, a: 500 }] }],
-    ['heure hors bornes', { ...brut, trains: [{ ...brut.trains[0], a: 5000 }] }],
-    ['jour négatif', { ...brut, trains: [{ ...brut.trains[0], j: [-1] }] }],
-    ['texte trop long', { ...brut, trains: [{ ...brut.trains[0], o: 'x'.repeat(41) }] }],
-    ['suite de chiffres type carte', { ...brut, trains: [{ ...brut.trains[0], gd: '4111 1111 1111 1111' }] }],
+    ['source non https', { ...brut, sources: [{ ...brut.sources[0], url: 'javascript:alert(1)' }] }],
+    ['trop de trains', { ...brut, trains: Array.from({ length: 5001 }, () => brut.trains[0]) }],
     ['pas un objet', null],
-  ])('refuse : %s', (_n, v) => {
+  ])('refuse le fichier : %s', (_n, v) => {
     expect(() => validerHoraires(v)).toThrow();
+  });
+  it.each([
+    ['sens inconnu', { s: 'XX' }],
+    ['numéro vide', { n: '' }],
+    ['arrivée avant départ', { d: 600, a: 500 }],
+    ['heure hors bornes', { a: 5000 }],
+    ['jour négatif', { j: [-1] }],
+    ['texte trop long', { gd: 'x'.repeat(81) }],
+    ['suite de chiffres type carte', { gd: '4111 1111 1111 1111' }],
+  ])('écarte le seul train invalide, garde les autres : %s', (_n, defaut) => {
+    const h = validerHoraires({ ...brut, trains: [...brut.trains, { ...brut.trains[0], ...defaut }] });
+    expect(h.ecartes).toBe(1);
+    expect(h.trains).toHaveLength(brut.trains.length);
   });
 });
 
@@ -82,6 +93,17 @@ describe('trains du jour et créneaux (cadrage v2 : aller 9h00-9h40, retour 17h3
     ]);
     expect(numeros(proposer(h, '2026-11-02', 'MP').dansCreneau)).toEqual(['1', '2']);
     expect(numeros(proposer(h, '2026-11-02', 'PM').dansCreneau)).toEqual(['4', '5']);
+  });
+  it('train de nuit (arrivée le lendemain) jamais proposé pour l’aller du jour', () => {
+    const h = jeu([
+      { s: 'MP', n: '5772', d: 21 * 60, a: 24 * 60 + 8 * 60 + 50 },
+      { s: 'MP', n: '1', d: 6 * 60, a: 10 * 60 },
+    ]);
+    expect(numeros(proposer(h, '2026-11-02', 'MP').proches)).toEqual(['1']);
+  });
+  it('âge des horaires publiés', () => {
+    expect(ageHoraires(H, '2026-11-15')).toBe(14);
+    expect(ageHoraires(H, '2026-11-16')).toBeGreaterThan(AGE_MAX_HORAIRES);
   });
   it('couverture : dates hors période non publiées', () => {
     expect(couvre(H, '2026-11-02')).toBe(true);
