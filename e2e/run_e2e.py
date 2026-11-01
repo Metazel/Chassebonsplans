@@ -62,7 +62,7 @@ def new_page(browser: Browser, vue: str = "comparer", horaires: str | None = HOR
     external: list[str] = []
 
     def route(r):
-        if r.request.url.startswith(URL) and r.request.url.split("?")[0].endswith("/horaires.json"):
+        if r.request.url.startswith(URL) and r.request.url.split("?")[0].endswith("/horaires.json") and horaires != "publiés":
             if horaires is None:
                 r.fulfill(status=404, body="")
             else:
@@ -223,6 +223,10 @@ def accessibilite(browser: Browser) -> None:
         page.goto(URL + "#deplacements")
         ajouter_deplacement(page, "2026-11-04", "2026-11-06")
         page.get_by_label("Réservation").first.select_option("option")
+        retour = bloc(page, "Retour")
+        retour.get_by_role("radio", name="6119", exact=False).check()  # retour avec dîner à bord
+        retour.get_by_label("Réservation").select_option("paye")
+        retour.get_by_label("Prix payé (€, facultatif)").fill("abc")  # erreur affichée
         violations = axe(page)
         shot(page, f"axe-{scheme}-deplacements")
         assert not violations, f"{scheme} deplacements: {violations}"
@@ -533,6 +537,12 @@ def deplacement_reservation(browser: Browser) -> None:
     expect(retour.get_by_label("Prix payé (€, facultatif)")).to_have_attribute("aria-invalid", "true")
     retour.get_by_label("Prix payé (€, facultatif)").fill("39,90")
     expect(page.locator("li.deplacement").first).to_contain_text("Un trajet reste à payer. Total payé : 39,90 €.")
+    # Payé → option → payé : le prix affiché est bien celui enregistré.
+    retour.get_by_label("Réservation").select_option("option")
+    expect(page.locator("li.deplacement").first).not_to_contain_text("Total payé")
+    retour.get_by_label("Réservation").select_option("paye")
+    expect(retour.get_by_label("Prix payé (€, facultatif)")).to_have_value("39,90")
+    expect(page.locator("li.deplacement").first).to_contain_text("Total payé : 39,90 €.")
     p = attendre_enregistrement(page, lambda p: p.get("deplacements", [{}])[0].get("retour", {}).get("prixCentimes") == 3990)
     assert p["deplacements"][0]["aller"] == {"date": "2026-11-04", "statut": "option", "limiteOption": "2026-11-02", "train": {"numero": "6136", "operateur": "TGV INOUI", "depart": 363, "arrivee": 562}}, p
     with page.expect_download() as dl:
@@ -540,7 +550,7 @@ def deplacement_reservation(browser: Browser) -> None:
     ics = Path(dl.value.path()).read_text(encoding="utf-8")
     assert "DTSTART;TZID=Europe/Paris:20261104T060300" in ics, ics
     assert "DTSTART;TZID=Europe/Paris:20261106T181800" in ics, ics
-    assert "TRIGGER:-P1D" in ics and "DTSTART;VALUE=DATE:20261102" in ics, ics
+    assert "TRIGGER:-PT15H" in ics and "DTSTART;VALUE=DATE:20261102" in ics, ics
     shot(page, "reservation")
     assert not errors, errors
     assert not external, external
@@ -570,6 +580,20 @@ def horaires_indisponibles(browser: Browser) -> None:
     expect(page.get_by_role("heading", name="Sources des horaires")).to_have_count(0)
     attendre_enregistrement(page, lambda p: len(p.get("deplacements", [])) == 1)
     assert not [e for e in errors if "404" not in e], errors
+
+
+@scenario("Données publiées — l'appli lit en entier les horaires de cette publication")
+def horaires_publies(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, vue="deplacements", horaires="publiés")
+    publie = json.loads((ROOT / "dist" / "horaires.json").read_text(encoding="utf-8"))
+    jour = max(publie["debut"], MAINTENANT[:10])  # l'horloge de la recette est figée au 1er novembre 2026
+    ajouter_deplacement(page, jour, jour)
+    expect(page.get_by_role("heading", name="Sources des horaires")).to_be_visible()
+    for s in publie["sources"]:
+        expect(page.get_by_role("link", name=s["nom"], exact=False)).to_be_visible()
+    expect(page.locator("main")).not_to_contain_text("illisible")
+    expect(page.locator("main")).not_to_contain_text("Horaires indisponibles")
+    assert not errors, errors
 
 
 @scenario("Résilience — date au-delà des horaires publiés : signalée, pas de train inventé")
@@ -630,7 +654,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_non_publies, purge_24_mois, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, horaires_non_publies, purge_24_mois, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:
