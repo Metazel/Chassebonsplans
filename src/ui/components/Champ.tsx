@@ -4,7 +4,8 @@ export function Champ(props: {
   id: string;
   libelle: string;
   valeur: string;
-  type?: 'text' | 'time';
+  type?: 'text' | 'time' | 'date';
+  min?: string;
   aide?: string;
   erreur?: string | undefined;
   inputMode?: 'decimal' | 'numeric';
@@ -33,7 +34,7 @@ export function Champ(props: {
           {props.aide}
         </span>
       )}
-      {props.type === 'time' ? <input type="time" {...commun} /> : <input type="text" inputMode={props.inputMode} {...commun} />}
+      {props.type === 'time' || props.type === 'date' ? <input type={props.type} min={props.min} {...commun} /> : <input type="text" inputMode={props.inputMode} {...commun} />}
       {erreur && (
         <span class="erreur" id={`${props.id}-err`}>
           {erreur}

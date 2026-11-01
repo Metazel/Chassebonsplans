@@ -130,3 +130,26 @@ footer { color: var(--texte-2); font-size: 0.95rem; padding-bottom: 2rem; margin
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Mes déplacements */
+ul.deplacements { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
+li.deplacement > article { background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; padding: 0.75rem 1rem 1rem; }
+li.deplacement h2 { margin-top: 0.25rem; }
+li.deplacement h2:focus { outline: none; }
+section.trajet { border-top: 1px solid var(--bord); margin-top: 0.75rem; padding-top: 0.5rem; }
+h3 { font-size: 1.05rem; margin: 0.5rem 0; }
+fieldset.choix-train { border: none; margin: 0; padding: 0; min-width: 0; }
+.option-train { display: flex; align-items: flex-start; gap: 0.5rem; border: 1px solid var(--bord); border-radius: 8px; padding: 0.25rem 0.75rem; margin-bottom: 0.5rem; }
+.option-train:has(input:checked) { border: 2px solid var(--accent); background: var(--retenu); }
+.option-train input[type='radio'] { width: 24px; height: 24px; min-height: 24px; margin: 0.6rem 0 0; flex: none; accent-color: var(--accent); }
+.option-train label { font-weight: 400; min-height: 44px; display: block; padding: 0.5rem 0; flex: 1; overflow-wrap: anywhere; }
+.horaire { font-weight: 700; }
+.repas.a-bord { color: var(--alerte-texte); font-weight: 600; }
+.reservation { margin: 0.5rem 0; }
+.recherche { background: var(--fond); border: 1px dashed var(--bord); border-radius: 8px; padding: 0.5rem 0.75rem; user-select: all; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.actions button.secondaire { margin-top: 0; }
+.actions a { display: inline-flex; align-items: center; min-height: 44px; }
+select { font: inherit; min-height: 44px; padding: 0.5rem 0.625rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--surface); color: var(--texte); width: 100%; }
+.suivi { margin-top: 0.5rem; }
+form.ajout button[type='submit'] { margin-top: 0.75rem; }
