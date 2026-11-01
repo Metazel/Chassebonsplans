@@ -5,6 +5,8 @@
  */
 import type { Reglages } from './saisie';
 import { contientNumeroCarte } from './securite';
+import { estDateIso } from './dates';
+import { lireDeplacements, type Deplacement } from './deplacements';
 
 export const VERSION_PROFIL = 1;
 export const FORMAT_EXPORT = 'chassebonsplans-export';
@@ -21,19 +23,13 @@ export interface Profil {
   reglages?: Reglages;
   /** Date ISO de la dernière sauvegarde exportée. */
   derniereSauvegarde?: string;
+  /** Déplacements planifiés (CU-A, CU-D). */
+  deplacements?: Deplacement[];
 }
 
 export const profilVide = (): Profil => ({ version: VERSION_PROFIL, leviers: {} });
 
-const ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-export function estDateIso(v: unknown): v is string {
-  if (typeof v !== 'string') return false;
-  const m = ISO.exec(v);
-  if (!m) return false;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  return d.getUTCFullYear() === Number(m[1]) && d.getUTCMonth() === Number(m[2]) - 1 && d.getUTCDate() === Number(m[3]);
-}
+export { estDateIso } from './dates';
 
 /** Longueur maximale d'un champ de réglage (assez court pour qu'aucun numéro de carte n'y tienne). */
 export const LONGUEUR_REGLAGE = 10;
@@ -91,6 +87,11 @@ export function lireProfil(src: unknown, idsConnus: ReadonlySet<string>): Lectur
     if (estDateIso(r.derniereSauvegarde)) profil.derniereSauvegarde = r.derniereSauvegarde;
     else ecartes.push('date de dernière sauvegarde');
   }
+  if (r.deplacements !== undefined) {
+    const { deplacements, ecartes: n } = lireDeplacements(r.deplacements);
+    if (deplacements.length) profil.deplacements = deplacements;
+    if (n) ecartes.push(n > 1 ? `${n} déplacements` : '1 déplacement');
+  }
   return { profil, ecartes };
 }
 
@@ -109,11 +110,13 @@ export function pourStockage(p: Profil): Profil {
   const propre: Profil = { version: VERSION_PROFIL, leviers };
   if (p.reglages && reglagesStockables(p.reglages)) propre.reglages = { ...p.reglages };
   if (p.derniereSauvegarde && estDateIso(p.derniereSauvegarde)) propre.derniereSauvegarde = p.derniereSauvegarde;
+  const { deplacements } = lireDeplacements(p.deplacements ?? []);
+  if (deplacements.length) propre.deplacements = deplacements;
   return propre;
 }
 
 export function aDesDonnees(p: Profil): boolean {
-  return Object.values(p.leviers).some((l) => l.detenu) || p.reglages !== undefined;
+  return Object.values(p.leviers).some((l) => l.detenu) || p.reglages !== undefined || (p.deplacements?.length ?? 0) > 0;
 }
 
 /** Contenu du fichier de sauvegarde (EXG-04). */
@@ -124,7 +127,7 @@ export function exporter(p: Profil, aujourdhui: string): string {
 }
 
 /** Relit un fichier de sauvegarde ; lève une erreur lisible si le fichier n'est pas valide. */
-export const TAILLE_MAX_IMPORT = 100_000;
+export const TAILLE_MAX_IMPORT = 300_000;
 
 export function importer(texte: string, idsConnus: ReadonlySet<string>): Lecture {
   if (texte.length > TAILLE_MAX_IMPORT) throw new Error('Fichier trop volumineux pour une sauvegarde.');
