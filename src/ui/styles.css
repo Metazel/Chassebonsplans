@@ -153,3 +153,24 @@ fieldset.choix-train { border: none; margin: 0; padding: 0; min-width: 0; }
 select { font: inherit; min-height: 44px; padding: 0.5rem 0.625rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--surface); color: var(--texte); width: 100%; }
 .suivi { margin-top: 0.5rem; }
 form.ajout button[type='submit'] { margin-top: 0.75rem; }
+
+/* Itération 4 : suppression visible, sélection, panier, ouvertures des ventes */
+.tete-deplacement { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.tete-deplacement h2 { flex: 1; margin: 0.25rem 0; min-width: 10rem; }
+.tete-deplacement input[type='checkbox'] { width: 28px; height: 28px; min-height: 28px; margin: 8px; flex: none; accent-color: var(--accent); }
+button.supprimer { margin-top: 0; }
+li.deplacement.selectionne > article { border: 2px solid var(--erreur); }
+.barre-selection { position: sticky; top: 0; z-index: 2; background: var(--surface); border: 2px solid var(--erreur); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; }
+.barre-selection p { margin: 0 0 0.5rem; font-weight: 600; }
+section.panier, section.ouvertures { background: var(--surface); border: 2px solid var(--accent); border-radius: 12px; padding: 0.25rem 1rem 1rem; margin: 1rem 0; }
+section.ouvertures ul { list-style: none; padding: 0; margin: 0; }
+.vente { margin: 0.25rem 0; }
+.vente.en-vente { color: var(--succes); font-weight: 600; }
+details.alerte-sncf { margin: 0.5rem 0; }
+details.alerte-sncf summary { font-weight: 600; color: var(--lien); }
+ol.etapes { padding-left: 1.25rem; }
+ol.etapes li { margin: 0.5rem 0; }
+ol.etapes button.secondaire, .seance .actions button { margin-top: 0; }
+.seance progress { width: 100%; height: 0.75rem; accent-color: var(--accent); }
+.carte-panier { background: var(--surface); border: 2px solid var(--accent); border-radius: 12px; padding: 0.25rem 1rem; margin: 0.75rem 0; }
+button.lien-discret { background: transparent; border-color: transparent; color: var(--lien); text-decoration: underline; padding-left: 0; }

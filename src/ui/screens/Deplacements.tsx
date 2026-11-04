@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ParametresCout } from '../../domain/coutComplet';
 import { dateCourte, dateLongue } from '../../domain/dates';
-import { formaterHeure } from '../../domain/heure';
+import { formaterHeure, heureEnClair } from '../../domain/heure';
 import { formaterMontant } from '../../domain/argent';
 import {
   AGE_MAX_HORAIRES,
@@ -24,6 +24,7 @@ import {
   LIBELLES_STATUT,
   MAX_DEPLACEMENTS,
   STATUTS,
+  changerStatuts,
   choisir,
   lirePrix,
   nouveauDeplacement,
@@ -38,6 +39,9 @@ import {
   type Trajet,
 } from '../../domain/deplacements';
 import { aExporter, genererIcs } from '../../domain/ics';
+import { etatVente, ouverturesAttendues, type OuvertureAttendue } from '../../domain/ventes';
+import { OUVERTURES } from '../../data/ouvertures';
+import { SeancePanier, aMettreAuPanier, type ElementPanier } from './SeancePanier';
 import { ExternalLink } from '../components/ExternalLink';
 
 export type EtatHoraires = { etat: 'chargement' } | { etat: 'ok'; horaires: Horaires } | { etat: 'erreur' };
@@ -96,6 +100,115 @@ function LigneTrain({ t, cote, p }: { t: TrainHoraire; cote: Cote; p: Parametres
   );
 }
 
+/** Le trajet est-il en vente ? Sinon, date d'ouverture connue ou non (calendrier daté, sans requête). */
+function EtatVenteTrajet(props: { operateur: string; date: string; aujourdhui: string }) {
+  const e = etatVente(OUVERTURES, props.operateur, props.date, props.aujourdhui);
+  if (e.etat === 'en-vente') return <p class="vente en-vente">En vente</p>;
+  if (e.etat === 'ouverture')
+    return (
+      <p class="alerte vente">
+        Pas encore en vente : ouverture le {dateLongue(e.le)}
+        {e.heure !== undefined && ` vers ${heureEnClair(e.heure)}`}.
+      </p>
+    );
+  return <p class="alerte vente">Pas encore en vente{e.operateur ? ` : ouverture ${e.operateur.nom} non encore annoncée` : ''}.</p>;
+}
+
+/** Copie un texte et rend compte du résultat (la copie peut être refusée par le navigateur). */
+function useCopie(): [(t: string) => Promise<boolean>, 'ok' | 'echec' | null, () => void] {
+  const [etat, setEtat] = useState<'ok' | 'echec' | null>(null);
+  const copier = async (t: string) => {
+    try {
+      await navigator.clipboard.writeText(t);
+      setEtat('ok');
+      return true;
+    } catch {
+      setEtat('echec');
+      return false;
+    }
+  };
+  return [copier, etat, () => setEtat(null)];
+}
+
+/**
+ * Prépare l'alerte SNCF Connect du trajet : « alerte réservation » s'il n'est pas encore en vente,
+ * « alerte petits prix » (prix cible) s'il l'est. L'alerte est créée par le voyageur sur son compte (EXG-08).
+ */
+function AlerteSncf(props: { base: string; trajet: Trajet; cote: Cote; recherche: string; aujourdhui: string; onTrajet: (t: Trajet) => void }) {
+  const { trajet, base } = props;
+  const sens = sensDu(props.cote);
+  const choisi = trajet.train;
+  const e = choisi ? etatVente(OUVERTURES, choisi.operateur, trajet.date, props.aujourdhui) : { etat: 'en-vente' as const };
+  const [cible, setCible] = useState(trajet.prixCibleCentimes !== undefined ? String(trajet.prixCibleCentimes / 100).replace('.', ',') : '');
+  const [copier, copie, oublier] = useCopie();
+  const lu = lirePrix(cible);
+  const trajetTexte = `${GARES[sens].depart} → ${GARES[sens].arrivee}, aller simple le ${dateLongue(trajet.date)}`;
+  const reservation = e.etat !== 'en-vente';
+  const texte = reservation ? trajetTexte : lu ? `${trajetTexte}, budget ${formaterMontant(lu)}` : null;
+  useEffect(oublier, [texte]);
+  return (
+    <details class="alerte-sncf">
+      <summary>Être prévenu par SNCF Connect{reservation ? ' à l’ouverture des ventes' : ' d’un petit prix'}</summary>
+      {!reservation && (
+        <div class="champ champ-court">
+          <label for={`${base}-cible`}>Prix visé (€)</label>
+          <input
+            id={`${base}-cible`}
+            type="text"
+            inputMode="decimal"
+            maxLength={10}
+            autoComplete="off"
+            value={cible}
+            aria-invalid={lu === null ? 'true' : undefined}
+            aria-describedby={lu === null ? `${base}-cible-err` : undefined}
+            onInput={(ev) => {
+              const v = (ev.currentTarget as HTMLInputElement).value;
+              setCible(v);
+              const prix = lirePrix(v);
+              if (prix === null) return;
+              const t: Trajet = { ...trajet };
+              if (prix === undefined || prix === 0) delete t.prixCibleCentimes;
+              else t.prixCibleCentimes = prix;
+              props.onTrajet(t);
+            }}
+          />
+          {lu === null && (
+            <span class="erreur" id={`${base}-cible-err`}>
+              Prix invalide : en euros, par exemple 35.
+            </span>
+          )}
+        </div>
+      )}
+      {texte ? (
+        <>
+          <p class="recherche">{texte}</p>
+          <ol class="etapes">
+            <li>
+              <button type="button" class="secondaire" onClick={() => void copier(texte)}>
+                Copier l’alerte
+              </button>
+            </li>
+            <li>
+              Sur <ExternalLink href="https://www.sncf-connect.com/">SNCF Connect</ExternalLink>, connecté à votre compte : Compte › Alertes billets disponibles ›{' '}
+              {reservation ? 'Alertes réservation' : 'Alerte petits prix'} › Créer une alerte.
+            </li>
+            <li>Collez le trajet et validez : SNCF Connect vous prévient par e-mail ou notification.</li>
+          </ol>
+          <p class="aide" aria-live="polite">
+            {copie === 'ok' && 'Alerte copiée.'}
+            {copie === 'echec' && 'Copie impossible ici : sélectionnez le texte ci-dessus.'}
+          </p>
+        </>
+      ) : (
+        <p class="aide">Indiquez le prix visé pour préparer l’alerte petits prix.</p>
+      )}
+      {choisi && canalVente(choisi.operateur)?.nom !== 'SNCF Connect' && (
+        <p class="aide">Les alertes SNCF Connect surveillent les trains qu’il vend : votre {choisi.operateur} n’en fait pas partie.</p>
+      )}
+    </details>
+  );
+}
+
 function BlocTrajet(props: {
   d: Deplacement;
   cote: Cote;
@@ -135,6 +248,8 @@ function BlocTrajet(props: {
       )
     : null;
   const canal = choisi ? canalVente(choisi.operateur) : null;
+  // Pas encore en vente : inutile de proposer la réservation, l'alerte d'ouverture la remplace.
+  const pasEnVente = !!choisi && trajet.statut === 'a-reserver' && etatVente(OUVERTURES, choisi.operateur, trajet.date, props.aujourdhui).etat !== 'en-vente';
   // Le message « copiée » ne vaut que pour la recherche affichée.
   useEffect(() => setCopie(null), [recherche]);
 
@@ -153,6 +268,7 @@ function BlocTrajet(props: {
     if (trajet.train) t.train = trajet.train;
     if (statut === 'option' && trajet.limiteOption) t.limiteOption = trajet.limiteOption;
     if (trajet.prixCentimes !== undefined) t.prixCentimes = trajet.prixCentimes;
+    if (trajet.prixCibleCentimes !== undefined) t.prixCibleCentimes = trajet.prixCibleCentimes;
     props.onTrajet(t);
   };
 
@@ -161,6 +277,7 @@ function BlocTrajet(props: {
       <h3 id={`${base}-titre`}>
         {LIBELLE_SENS[cote]} — {dateLongue(trajet.date)}
       </h3>
+      {choisi && trajet.statut === 'a-reserver' && trajet.date >= props.aujourdhui && <EtatVenteTrajet operateur={choisi.operateur} date={trajet.date} aujourdhui={props.aujourdhui} />}
       {props.horaires.etat === 'chargement' && <p class="aide">Chargement des horaires…</p>}
       {props.horaires.etat === 'erreur' && <p class="alerte">Horaires indisponibles : choisissez votre train directement sur le site de vente.</p>}
       {h && !publie && trajet.date < h.debut && trajet.date >= props.aujourdhui && <p class="aide">Horaires non disponibles pour cette date.</p>}
@@ -202,7 +319,7 @@ function BlocTrajet(props: {
           vente.
         </p>
       )}
-      {choisi && recherche && (
+      {choisi && recherche && !pasEnVente && (
         <div class="reservation">
           <p class="recherche" id={`${base}-recherche`}>
             {recherche}
@@ -211,17 +328,16 @@ function BlocTrajet(props: {
             <button type="button" class="secondaire" aria-describedby={`${base}-recherche`} onClick={() => void copier()}>
               Copier la recherche
             </button>
-            {canal ? (
-              <ExternalLink href={canal.url}>Réserver sur {canal.nom}</ExternalLink>
-            ) : (
-              <span class="aide">OUIGO : réservez sur le site ou l’application OUIGO.</span>
-            )}
+            {canal && <ExternalLink href={canal.url}>Réserver sur {canal.nom}</ExternalLink>}
           </div>
           <p class="aide" aria-live="polite">
             {copie === 'ok' && 'Recherche copiée : collez-la dans le champ de recherche du site de vente.'}
             {copie === 'echec' && 'Copie impossible ici : sélectionnez le texte ci-dessus pour le copier.'}
           </p>
         </div>
+      )}
+      {choisi && trajet.statut === 'a-reserver' && trajet.date >= props.aujourdhui && (
+        <AlerteSncf base={base} trajet={trajet} cote={cote} recherche={recherche ?? ''} aujourdhui={props.aujourdhui} onTrajet={props.onTrajet} />
       )}
       <div class="ligne suivi">
         <div class="champ">
@@ -294,6 +410,8 @@ function CarteDeplacement(props: {
   horaires: EtatHoraires;
   p: ParametresCout;
   aujourdhui: string;
+  selectionne: boolean;
+  onSelection: (oui: boolean) => void;
   onChange: (d: Deplacement) => void;
   onSupprimer: () => void;
 }) {
@@ -309,34 +427,36 @@ function CarteDeplacement(props: {
   }, [confirmer]);
   const total = totalPaye(d);
   const restants = [d.aller, d.retour].filter((t) => t.statut !== 'paye').length;
+  const periode = `du ${dateCourte(d.aller.date)} au ${dateCourte(d.retour.date)}`;
   return (
-    <li class="deplacement">
+    <li class={props.selectionne ? 'deplacement selectionne' : 'deplacement'}>
       <article aria-labelledby={`${d.id}-titre`}>
-        <h2 id={`${d.id}-titre`} tabIndex={-1}>
-          Du {dateCourte(d.aller.date)} au {dateCourte(d.retour.date)}
-        </h2>
-        <p class="aide">
-          {restants === 0 ? 'Réservation terminée.' : restants === 1 ? 'Un trajet reste à payer.' : 'Deux trajets restent à payer.'}
-          {total > 0 && ` Total payé : ${formaterMontant(total)}.`}
-        </p>
-        {(['aller', 'retour'] as const).map((cote) => (
-          <BlocTrajet key={cote} d={d} cote={cote} horaires={props.horaires} p={props.p} aujourdhui={props.aujourdhui} onTrajet={(t) => props.onChange({ ...d, [cote]: t })} />
-        ))}
-        {!confirmer ? (
-          <button
-            type="button"
-            class="secondaire"
-            ref={supprimer}
-            onClick={() => {
-              focus.current = 'annuler';
-              setConfirmer(true);
-            }}
-          >
-            Supprimer ce déplacement
-          </button>
-        ) : (
+        <div class="tete-deplacement">
+          <input type="checkbox" id={`${d.id}-sel`} checked={props.selectionne} onChange={(e) => props.onSelection((e.currentTarget as HTMLInputElement).checked)} />
+          <label for={`${d.id}-sel`} class="sr-only">
+            Sélectionner le déplacement {periode}
+          </label>
+          <h2 id={`${d.id}-titre`} tabIndex={-1}>
+            Du {dateCourte(d.aller.date)} au {dateCourte(d.retour.date)}
+          </h2>
+          {!confirmer && (
+            <button
+              type="button"
+              class="secondaire supprimer"
+              ref={supprimer}
+              aria-label={`Supprimer le déplacement ${periode}`}
+              onClick={() => {
+                focus.current = 'annuler';
+                setConfirmer(true);
+              }}
+            >
+              Supprimer
+            </button>
+          )}
+        </div>
+        {confirmer && (
           <div class="confirmation" role="group" aria-labelledby={`${d.id}-conf`}>
-            <p id={`${d.id}-conf`}>Supprimer le déplacement du {dateCourte(d.aller.date)} au {dateCourte(d.retour.date)} ?</p>
+            <p id={`${d.id}-conf`}>Supprimer le déplacement {periode} ?</p>
             <button type="button" class="danger" onClick={props.onSupprimer}>
               Oui, supprimer
             </button>{' '}
@@ -353,8 +473,42 @@ function CarteDeplacement(props: {
             </button>
           </div>
         )}
+        <p class="aide">
+          {restants === 0 ? 'Réservation terminée.' : restants === 1 ? 'Un trajet reste à payer.' : 'Deux trajets restent à payer.'}
+          {total > 0 && ` Total payé : ${formaterMontant(total)}.`}
+        </p>
+        {(['aller', 'retour'] as const).map((cote) => (
+          <BlocTrajet key={cote} d={d} cote={cote} horaires={props.horaires} p={props.p} aujourdhui={props.aujourdhui} onTrajet={(t) => props.onChange({ ...d, [cote]: t })} />
+        ))}
       </article>
     </li>
+  );
+}
+
+/** Bandeau des ouvertures de ventes à venir qui concernent des trajets à réserver, avec rappel agenda. */
+function BandeauOuvertures(props: { ouvertures: OuvertureAttendue[]; onRappel: (o: OuvertureAttendue) => void }) {
+  if (!props.ouvertures.length) return null;
+  return (
+    <section class="ouvertures" aria-labelledby="titre-ouvertures">
+      <h2 id="titre-ouvertures">Ouvertures des ventes à venir</h2>
+      <ul>
+        {props.ouvertures.map((o) => (
+          <li key={`${o.operateur.id}-${o.le}`}>
+            <p>
+              <strong>
+                {o.operateur.nom} : {dateLongue(o.le)}
+                {o.heure !== undefined && `, vers ${heureEnClair(o.heure)}`}
+              </strong>{' '}
+              — {o.trajets.length} de vos trajets attend{o.trajets.length > 1 ? 'ent' : ''} cette ouverture. Les premiers billets sont les moins chers.
+            </p>
+            <button type="button" class="secondaire" onClick={() => props.onRappel(o)}>
+              Me réveiller pour l’ouverture {o.operateur.nom} (.ics)
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p class="aide">Heure indicative, constatée lors des dernières ouvertures. Calendrier vérifié le {dateLongue(OUVERTURES.meta.verifieLe)}.</p>
+    </section>
   );
 }
 
@@ -370,6 +524,9 @@ export function Deplacements(props: {
   const [retour, setRetour] = useState('');
   const [erreur, setErreur] = useState<{ texte: string; champ: 'aller' | 'retour' } | null>(null);
   const [annonce, setAnnonce] = useState('');
+  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
+  const [confirmerSelection, setConfirmerSelection] = useState(false);
+  const [seance, setSeance] = useState<ElementPanier[] | null>(null);
   const focusApres = useRef<string | null>(null);
   const h = props.horaires.etat === 'ok' ? props.horaires.horaires : null;
 
@@ -379,6 +536,11 @@ export function Deplacements(props: {
       focusApres.current = null;
     }
   });
+  // Une sélection ne garde que des déplacements qui existent encore (suppression ailleurs, autre onglet).
+  useEffect(() => {
+    const ids = new Set(deplacements.map((d) => d.id));
+    if ([...selection].some((id) => !ids.has(id))) setSelection(new Set([...selection].filter((id) => ids.has(id))));
+  }, [deplacements]);
 
   const ajouter = (e: Event) => {
     e.preventDefault();
@@ -403,7 +565,9 @@ export function Deplacements(props: {
   const aVenir = deplacements.filter((d) => d.retour.date >= aujourdhui);
   const passes = deplacements.filter((d) => d.retour.date < aujourdhui);
   const urgentes = optionsUrgentes(deplacements, aujourdhui);
+  const ouvertures = ouverturesAttendues(OUVERTURES, aVenir, aujourdhui);
   const avecTrain = aVenir.filter(aExporter);
+  const panier = aMettreAuPanier(deplacements, aujourdhui, OUVERTURES);
   const age = h ? ageHoraires(h, aujourdhui) : 0;
 
   const maj = (d: Deplacement) => props.onChange(deplacements.map((x) => (x.id === d.id ? d : x)));
@@ -412,6 +576,35 @@ export function Deplacements(props: {
     focusApres.current = 'titre-liste';
     props.onChange(deplacements.filter((x) => x.id !== d.id));
   };
+  const selectionner = (id: string, oui: boolean) => {
+    const s2 = new Set(selection);
+    if (oui) s2.add(id);
+    else s2.delete(id);
+    setSelection(s2);
+    if (!s2.size) setConfirmerSelection(false);
+  };
+  const supprimerSelection = () => {
+    const n = selection.size;
+    props.onChange(deplacements.filter((d) => !selection.has(d.id)));
+    setSelection(new Set());
+    setConfirmerSelection(false);
+    setAnnonce(`${n} déplacement${n > 1 ? 's' : ''} supprimé${n > 1 ? 's' : ''}`);
+    focusApres.current = 'titre-liste';
+  };
+
+  const carte = (d: Deplacement) => (
+    <CarteDeplacement
+      key={d.id}
+      d={d}
+      horaires={props.horaires}
+      p={props.parametres}
+      aujourdhui={aujourdhui}
+      selectionne={selection.has(d.id)}
+      onSelection={(oui) => selectionner(d.id, oui)}
+      onChange={maj}
+      onSupprimer={() => retirer(d)}
+    />
+  );
 
   const champDate = (champ: 'aller' | 'retour', libelle: string, valeur: string, set: (v: string) => void, min: string) => (
     <div class="champ">
@@ -427,6 +620,25 @@ export function Deplacements(props: {
       />
     </div>
   );
+
+  if (seance) {
+    return (
+      <>
+        <h1 id="titre-vue" tabIndex={-1}>
+          Mes déplacements
+        </h1>
+        <SeancePanier
+          elements={seance}
+          deplacements={deplacements}
+          onStatut={(cibles, statut) => props.onChange(changerStatuts(deplacements, cibles, statut))}
+          onFin={() => {
+            setSeance(null);
+            focusApres.current = 'titre-liste';
+          }}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -465,6 +677,25 @@ export function Deplacements(props: {
           ))}
         </ul>
       )}
+      {panier.length > 0 && (
+        <section class="panier" aria-labelledby="titre-panier">
+          <h2 id="titre-panier">Réserver mes trains</h2>
+          <p>
+            {panier.length} train{panier.length > 1 ? 's' : ''} en vente à réserver. L’outil vous les présente un par un : un bouton copie la recherche et
+            ouvre le site, vous ajoutez au panier, puis vous payez une seule fois.
+          </p>
+          <button type="button" onClick={() => setSeance(panier)}>
+            Préparer mon panier ({panier.length} train{panier.length > 1 ? 's' : ''})
+          </button>
+        </section>
+      )}
+      <BandeauOuvertures
+        ouvertures={ouvertures}
+        onRappel={(o) => {
+          telechargerTexte(genererIcs([], new Date(), [o]), `ouverture-ventes-${o.operateur.id}-${o.le}.ics`, 'text/calendar');
+          setAnnonce(`Rappel de l’ouverture ${o.operateur.nom} téléchargé : ouvrez-le pour l’ajouter à votre agenda.`);
+        }}
+      />
 
       <section aria-labelledby="titre-ajout">
         <h2 id="titre-ajout">Ajouter un déplacement</h2>
@@ -486,22 +717,63 @@ export function Deplacements(props: {
         <h2 id="titre-liste" tabIndex={-1}>
           À venir
         </h2>
+        {selection.size > 0 && (
+          <div class="barre-selection" role="group" aria-label="Déplacements sélectionnés">
+            {!confirmerSelection ? (
+              <>
+                <p>
+                  {selection.size} déplacement{selection.size > 1 ? 's' : ''} sélectionné{selection.size > 1 ? 's' : ''}
+                </p>
+                <button
+                  type="button"
+                  class="danger"
+                  id="supprimer-selection"
+                  onClick={() => {
+                    focusApres.current = 'annuler-selection';
+                    setConfirmerSelection(true);
+                  }}
+                >
+                  Supprimer la sélection
+                </button>{' '}
+                <button type="button" class="secondaire" onClick={() => setSelection(new Set())}>
+                  Tout désélectionner
+                </button>
+              </>
+            ) : (
+              <>
+                <p>
+                  Supprimer définitivement {selection.size} déplacement{selection.size > 1 ? 's' : ''} ?
+                </p>
+                <button type="button" class="danger" onClick={supprimerSelection}>
+                  Oui, supprimer
+                </button>{' '}
+                <button
+                  type="button"
+                  class="secondaire"
+                  id="annuler-selection"
+                  onClick={() => {
+                    focusApres.current = 'supprimer-selection';
+                    setConfirmerSelection(false);
+                  }}
+                >
+                  Annuler
+                </button>
+              </>
+            )}
+          </div>
+        )}
         {aVenir.length === 0 ? (
           <p class="aide">Aucun déplacement prévu.</p>
         ) : (
-          <ul class="deplacements">
-            {aVenir.map((d) => (
-              <CarteDeplacement key={d.id} d={d} horaires={props.horaires} p={props.parametres} aujourdhui={aujourdhui} onChange={maj} onSupprimer={() => retirer(d)} />
-            ))}
-          </ul>
+          <ul class="deplacements">{aVenir.map(carte)}</ul>
         )}
         {avecTrain.length > 0 && (
           <p>
             <button
               type="button"
               onClick={() => {
-                telechargerTexte(genererIcs(avecTrain), 'chassebonsplans-deplacements.ics', 'text/calendar');
-                setAnnonce('Fichier agenda téléchargé : ouvrez-le pour ajouter vos trains et rappels d’option.');
+                telechargerTexte(genererIcs(avecTrain, new Date(), ouvertures), 'chassebonsplans-deplacements.ics', 'text/calendar');
+                setAnnonce('Fichier agenda téléchargé : ouvrez-le pour ajouter vos trains, ouvertures de ventes et rappels d’option.');
               }}
             >
               Ajouter à mon agenda (.ics)
@@ -518,9 +790,7 @@ export function Deplacements(props: {
             </summary>
             <p class="aide">Conservés 24 mois, puis effacés automatiquement.</p>
             <ul class="deplacements">
-              {passes.map((d) => (
-                <CarteDeplacement key={d.id} d={d} horaires={props.horaires} p={props.parametres} aujourdhui={aujourdhui} onChange={maj} onSupprimer={() => retirer(d)} />
-              ))}
+              {passes.map(carte)}
             </ul>
           </details>
         </section>
