@@ -170,7 +170,7 @@ export type CanalVente = { nom: string; url: string } | null;
  * Site de vente par opérateur : SNCF Connect vend TGV INOUI, Intercités et OUIGO (un seul panier) ;
  * Trenitalia se réserve sur trenitalia.fr. Aucun lien vers ouigo.com (CGU).
  */
-export function canalVente(operateur: string): CanalVente {
+export function canalVente(operateur: string): NonNullable<CanalVente> {
   const o = operateur.toLowerCase();
   if (o.includes('trenitalia')) return { nom: 'Trenitalia', url: 'https://www.trenitalia.fr/' };
   return { nom: 'SNCF Connect', url: 'https://www.sncf-connect.com/' };

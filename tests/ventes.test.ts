@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import brut from '../src/data/ouvertures-ventes.json';
 import { OUVERTURES } from '../src/data/ouvertures';
 import { calendrierDe, etatVente, ouverturesAttendues, validerOuvertures } from '../src/domain/ventes';
-import { aMettreAuPanier } from '../src/domain/panier';
+import { dansLePanier, listePanier } from '../src/domain/panier';
 import { changerStatuts, lireDeplacements, nouveauDeplacement, type Deplacement, type TrainChoisi } from '../src/domain/deplacements';
 import { genererIcs } from '../src/domain/ics';
 import { estAReverifier } from '../src/domain/referentiel';
@@ -92,33 +92,62 @@ describe('ouvertures attendues par mes trajets', () => {
   });
 });
 
-describe('séance panier', () => {
-  it('trains en vente et à réserver, SNCF Connect d’abord (OUIGO compris), puis Trenitalia, par date', () => {
+describe('liste « Réserver mes trains »', () => {
+  const plat = (liste: Deplacement[], auj = AUJ, maintenant = 10 * 60) =>
+    listePanier(liste, auj, maintenant, OUVERTURES).flatMap((g) => g.deplacements.flatMap((x) => x.cotes.map((c) => `${g.site.nom}:${x.deplacement.id}-${c}`)));
+  it('SNCF Connect d’abord (OUIGO compris), puis Trenitalia ; aller-retour regroupés ; pas encore en vente et passés exclus', () => {
     const liste = [
       dep('d-bbbb', '2026-11-25', '2026-11-27', INOUI, TRENITALIA),
       dep('d-aaaa', '2026-11-18', '2026-11-20', OUIGO, INOUI),
-      dep('d-cccc', '2027-01-13', '2027-01-15', INOUI, INOUI), // pas encore en vente
+      dep('d-cccc', '2027-01-13', '2027-01-15', INOUI, INOUI), // ouverture le 12/11
       dep('d-dddd', '2026-10-01', '2026-10-02', INOUI, INOUI), // passé
     ];
-    const ordre = aMettreAuPanier(liste, AUJ, OUVERTURES).map((e) => `${e.id}-${e.cote}`);
-    expect(ordre).toEqual(['d-aaaa-aller', 'd-aaaa-retour', 'd-bbbb-aller', 'd-bbbb-retour']);
+    expect(plat(liste)).toEqual(['SNCF Connect:d-aaaa-aller', 'SNCF Connect:d-aaaa-retour', 'SNCF Connect:d-bbbb-aller', 'Trenitalia:d-bbbb-retour']);
+    const sncf = listePanier(liste, AUJ, 600, OUVERTURES)[0];
+    expect(sncf?.deplacements[0]?.cotes).toEqual(['aller', 'retour']);
   });
-  it('un trajet déjà dans le panier, en option ou payé n’est plus proposé', () => {
+  it('un train du jour déjà parti n’est plus proposé', () => {
+    const liste = [dep('d-aaaa', AUJ, '2026-11-06', INOUI, INOUI)];
+    expect(plat(liste, AUJ, 6 * 60)).toEqual(['SNCF Connect:d-aaaa-aller', 'SNCF Connect:d-aaaa-retour']);
+    expect(plat(liste, AUJ, 6 * 60 + 3)).toEqual(['SNCF Connect:d-aaaa-retour']);
+  });
+  it('un train mis au panier reste listé (coché) et compte dans « à finaliser », jusqu’au statut final', () => {
     const liste = [dep('d-aaaa', '2026-11-18', '2026-11-20', INOUI, INOUI)];
-    const apres = changerStatuts(liste, [{ id: 'd-aaaa', cote: 'aller' }], 'panier');
-    expect(aMettreAuPanier(apres, AUJ, OUVERTURES)).toEqual([{ id: 'd-aaaa', cote: 'retour' }]);
+    const auPanier = changerStatuts(liste, [{ id: 'd-aaaa', cote: 'aller' }], 'panier', { le: AUJ });
+    expect(auPanier[0]?.aller.panierLe).toBe(AUJ);
+    expect(plat(auPanier)).toHaveLength(2);
+    expect(dansLePanier(auPanier)).toEqual([{ id: 'd-aaaa', cote: 'aller' }]);
+    const paye = changerStatuts(auPanier, dansLePanier(auPanier), 'paye');
+    expect(paye[0]?.aller).toEqual({ date: '2026-11-18', statut: 'paye', train: INOUI });
+    expect(plat(paye)).toEqual(['SNCF Connect:d-aaaa-retour']);
   });
-  it('fin de séance : statut groupé, date limite d’option effacée hors option', () => {
-    const d = dep('d-aaaa', '2026-11-18', '2026-11-20', INOUI, INOUI);
-    d.aller = { ...d.aller, statut: 'option', limiteOption: '2026-11-10' };
-    const [r] = changerStatuts([d], [{ id: 'd-aaaa', cote: 'aller' }, { id: 'd-aaaa', cote: 'retour' }], 'paye');
-    expect(r?.aller).toEqual({ date: '2026-11-18', statut: 'paye', train: INOUI });
-    expect(r?.retour.statut).toBe('paye');
+  it('options posées : date limite commune, ramenée au jour du trajet', () => {
+    const liste = [dep('d-aaaa', '2026-11-18', '2026-11-20', INOUI, INOUI)];
+    const r = changerStatuts(liste, [{ id: 'd-aaaa', cote: 'aller' }, { id: 'd-aaaa', cote: 'retour' }], 'option', { limiteOption: '2026-11-19' });
+    expect(r[0]?.aller.limiteOption).toBe('2026-11-18');
+    expect(r[0]?.retour.limiteOption).toBe('2026-11-19');
   });
-  it('statut « dans le panier » et prix visé relus depuis le stockage', () => {
+  it('statut « dans le panier », date de mise au panier et prix visé relus depuis le stockage', () => {
     const d = dep('d-aaaa', '2026-11-18', '2026-11-20', INOUI);
-    const [lu] = lireDeplacements([{ ...d, aller: { ...d.aller, statut: 'panier', prixCibleCentimes: 3500 }, retour: { ...d.retour, prixCibleCentimes: 0 } }]).deplacements;
-    expect(lu?.aller).toEqual({ date: '2026-11-18', statut: 'panier', train: INOUI, prixCibleCentimes: 3500 });
-    expect(lu?.retour.prixCibleCentimes).toBeUndefined();
+    const [lu] = lireDeplacements([
+      { ...d, aller: { ...d.aller, statut: 'panier', panierLe: AUJ, prixCibleCentimes: 3500 }, retour: { ...d.retour, prixCibleCentimes: 0, panierLe: AUJ } },
+    ]).deplacements;
+    expect(lu?.aller).toEqual({ date: '2026-11-18', statut: 'panier', train: INOUI, prixCibleCentimes: 3500, panierLe: AUJ });
+    expect(lu?.retour).toEqual({ date: '2026-11-20', statut: 'a-reserver' });
+  });
+});
+
+describe('cas limites du calendrier', () => {
+  it('jour de l’ouverture : en vente seulement à partir de l’heure indicative', () => {
+    expect(etatVente(OUVERTURES, 'TGV INOUI', '2027-01-13', '2026-11-12', 5 * 60 + 44).etat).toBe('ouverture');
+    expect(etatVente(OUVERTURES, 'TGV INOUI', '2027-01-13', '2026-11-12', 5 * 60 + 45)).toEqual({ etat: 'en-vente' });
+  });
+  it('opérateur absent du calendrier (TER) : non suivi, jamais bloqué', () => {
+    expect(etatVente(OUVERTURES, 'TER', '2027-05-01', AUJ)).toEqual({ etat: 'non-suivi' });
+    expect(listePanier([dep('d-aaaa', '2027-05-01', '2027-05-03', { ...INOUI, operateur: 'TER' })], AUJ, 600, OUVERTURES)).toHaveLength(1);
+  });
+  it('JSON invalide : opérateur nul ou identifiant en double refusés avec une erreur lisible', () => {
+    expect(() => validerOuvertures({ ...brut, operateurs: [null] })).toThrow(/Calendrier des ventes invalide/);
+    expect(() => validerOuvertures({ ...brut, operateurs: [brut.operateurs[0], brut.operateurs[0]] })).toThrow(/en double/);
   });
 });

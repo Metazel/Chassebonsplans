@@ -28,6 +28,8 @@ export interface Trajet {
   prixCentimes?: number;
   /** Prix visé pour une alerte petits prix, en centimes (facultatif). */
   prixCibleCentimes?: number;
+  /** Jour de mise au panier (statut « panier ») : un panier oublié est signalé. */
+  panierLe?: string;
 }
 
 export interface Deplacement {
@@ -79,6 +81,7 @@ function lireTrajet(v: unknown): Trajet | null {
   const trajet: Trajet = { date: t.date, statut: t.statut as Statut };
   const train = lireTrain(t.train);
   if (train) trajet.train = train;
+  if (t.statut === 'panier' && estDateIso(t.panierLe)) trajet.panierLe = t.panierLe;
   // La date limite d'une option ne peut pas dépasser le jour du trajet.
   if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;
@@ -138,14 +141,25 @@ export function optionsUrgentes(liste: Deplacement[], aujourdhui: string): { dep
 
 export const sensDu = (cote: 'aller' | 'retour'): Sens => (cote === 'aller' ? 'MP' : 'PM');
 
-/** Change le statut de plusieurs trajets d'un coup (fin de séance panier). */
-export function changerStatuts(liste: Deplacement[], cibles: { id: string; cote: 'aller' | 'retour' }[], statut: Statut): Deplacement[] {
+/**
+ * Change le statut de plusieurs trajets d'un coup (liste du panier, finalisation).
+ * `le` : jour de mise au panier ; `limiteOption` : date limite commune, ramenée au jour du trajet si elle le dépasse.
+ */
+export function changerStatuts(
+  liste: Deplacement[],
+  cibles: { id: string; cote: 'aller' | 'retour' }[],
+  statut: Statut,
+  extra: { le?: string; limiteOption?: string } = {},
+): Deplacement[] {
   return liste.map((d) => {
     let r = d;
     for (const c of cibles) {
       if (c.id !== d.id) continue;
       const t: Trajet = { ...r[c.cote], statut };
-      if (statut !== 'option') delete t.limiteOption;
+      delete t.limiteOption;
+      delete t.panierLe;
+      if (statut === 'panier' && extra.le) t.panierLe = extra.le;
+      if (statut === 'option' && extra.limiteOption) t.limiteOption = extra.limiteOption < t.date ? extra.limiteOption : t.date;
       r = { ...r, [c.cote]: t };
     }
     return r;
