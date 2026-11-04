@@ -56,8 +56,10 @@ def shot(page: Page, name: str) -> None:
         page.screenshot(path=str(SHOTS / f"{name}.png"), full_page=True)
 
 
-def new_page(browser: Browser, vue: str = "comparer", horaires: str | None = HORAIRES, **extra) -> tuple[Page, list[str], list[str]]:
+def new_page(browser: Browser, vue: str = "comparer", horaires: str | None = HORAIRES, init: str | None = None, **extra) -> tuple[Page, list[str], list[str]]:
     ctx = browser.new_context(**{**PHONE, **extra})
+    if init:
+        ctx.add_init_script(init)
     errors: list[str] = []
     external: list[str] = []
 
@@ -227,9 +229,17 @@ def accessibilite(browser: Browser) -> None:
         retour.get_by_role("radio", name="6119", exact=False).check()  # retour avec dîner à bord
         retour.get_by_label("Réservation").select_option("paye")
         retour.get_by_label("Prix payé (€, facultatif)").fill("abc")  # erreur affichée
+        ajouter_deplacement(page, "2027-01-13", "2027-01-15")  # bandeau d'ouverture des ventes
+        page.get_by_text("Être prévenu par SNCF Connect à l’ouverture des ventes").first.click()
+        page.locator("li.deplacement input[type=checkbox]").first.check()  # barre de sélection
         violations = axe(page)
         shot(page, f"axe-{scheme}-deplacements")
         assert not violations, f"{scheme} deplacements: {violations}"
+        ajouter_deplacement(page, "2026-11-09", "2026-11-11")  # trains en vente : séance panier possible
+        page.get_by_role("button", name="Préparer mon panier", exact=False).click()
+        violations = axe(page)
+        shot(page, f"axe-{scheme}-panier")
+        assert not violations, f"{scheme} panier: {violations}"
         for vue, cocher in (("leviers", True), ("donnees", False)):
             page.goto(URL + "#" + vue)
             if cocher:
@@ -525,8 +535,9 @@ def deplacement_reservation(browser: Browser) -> None:
     expect(lien).to_have_attribute("rel", "noopener noreferrer")
     retour = bloc(page, "Retour")
     retour.get_by_role("radio", name="17:52 → 21:10 OUIGO 7821", exact=False).check()
-    expect(retour.get_by_role("link", name="Réserver", exact=False)).to_have_count(0)
-    expect(retour).to_contain_text("OUIGO : réservez sur le site ou l’application OUIGO.")
+    # OUIGO se vend sur SNCF Connect (même panier) ; jamais de lien vers ouigo.com (CGU).
+    expect(retour.get_by_role("link", name="Réserver sur SNCF Connect (nouvelle fenêtre)")).to_have_attribute("href", "https://www.sncf-connect.com/")
+    expect(page.locator("a[href*='ouigo.com']")).to_have_count(0)
     retour.get_by_role("radio", name="18:18 → 21:53 Trenitalia (Frecciarossa) 6119", exact=False).check()
     expect(retour.get_by_role("link", name="Réserver sur Trenitalia (nouvelle fenêtre)")).to_have_attribute("href", "https://www.trenitalia.fr/")
     aller.get_by_label("Réservation").select_option("option")
@@ -560,11 +571,15 @@ def deplacement_reservation(browser: Browser) -> None:
 def deplacement_suppression(browser: Browser) -> None:
     page, errors, _ = new_page(browser, vue="deplacements")
     ajouter_deplacement(page, "2026-11-04", "2026-11-06")
-    page.get_by_role("button", name="Supprimer ce déplacement").click()
+    # Le bouton est dans l'en-tête du déplacement, juste après son titre (visible sans défiler).
+    supprimer = page.get_by_role("button", name="Supprimer le déplacement du mer. 4 nov. au ven. 6 nov.")
+    titre = page.get_by_role("heading", level=2, name="Du mer. 4 nov. au ven. 6 nov.")
+    assert abs(supprimer.bounding_box()["y"] - titre.bounding_box()["y"]) < 60, "bouton Supprimer éloigné du titre"
+    supprimer.click()
     expect(page.get_by_role("button", name="Annuler")).to_be_focused()
     page.get_by_role("button", name="Annuler").click()
-    expect(page.get_by_role("button", name="Supprimer ce déplacement")).to_be_focused()
-    page.get_by_role("button", name="Supprimer ce déplacement").click()
+    expect(supprimer).to_be_focused()
+    supprimer.click()
     page.get_by_role("button", name="Oui, supprimer").click()
     expect(page.locator("li.deplacement")).to_have_count(0)
     expect(page.get_by_role("heading", name="À venir")).to_be_focused()
@@ -648,6 +663,102 @@ def purge_24_mois(browser: Browser) -> None:
     assert not errors, errors
 
 
+@scenario("Itération 4 — supprimer plusieurs déplacements d'un coup (sélection, confirmation)")
+def suppression_multiple(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, vue="deplacements")
+    for a, r in (("2026-11-04", "2026-11-06"), ("2026-11-09", "2026-11-11"), ("2026-11-16", "2026-11-18")):
+        ajouter_deplacement(page, a, r)
+    page.get_by_label("Sélectionner le déplacement du mer. 4 nov. au ven. 6 nov.").check()
+    page.get_by_label("Sélectionner le déplacement du lun. 16 nov. au mer. 18 nov.").check()
+    barre = page.get_by_role("group", name="Déplacements sélectionnés")
+    expect(barre).to_contain_text("2 déplacements sélectionnés")
+    barre.get_by_role("button", name="Supprimer la sélection").click()
+    expect(barre.get_by_role("button", name="Annuler")).to_be_focused()
+    barre.get_by_role("button", name="Oui, supprimer").click()
+    expect(page.locator("li.deplacement")).to_have_count(1)
+    expect(page.get_by_role("heading", level=2, name="Du lun. 9 nov. au mer. 11 nov.")).to_be_visible()
+    expect(page.get_by_role("heading", name="À venir")).to_be_focused()
+    attendre_enregistrement(page, lambda p: len(p.get("deplacements", [])) == 1)
+    assert not errors, errors
+
+
+OUVERTURES_STUB = "window.__ouverts = []; window.open = (u) => { window.__ouverts.push(String(u)); return null; };"
+
+
+@scenario("Itération 4 — séance panier : un train après l'autre, copie + ouverture en un geste, statuts mis à jour")
+def seance_panier(browser: Browser) -> None:
+    page, errors, external = new_page(browser, vue="deplacements", init=OUVERTURES_STUB, permissions=["clipboard-read", "clipboard-write"])
+    ajouter_deplacement(page, "2026-11-04", "2026-11-06")
+    ajouter_deplacement(page, "2026-11-09", "2026-11-11")
+    bloc(page, "Retour").get_by_role("radio", name="6119", exact=False).check()  # Trenitalia : autre site, en dernier
+    page.get_by_role("button", name="Préparer mon panier (4 trains)").click()
+    titre = page.get_by_role("heading", level=2, name="Préparer mon panier — train 1 sur 4")
+    expect(titre).to_be_focused()
+    expect(page.locator(".seance")).to_contain_text("Site de vente : SNCF Connect (TGV INOUI, OUIGO et Intercités dans un même panier).")
+    expect(page.locator(".carte-panier")).to_contain_text("Aller Marseille → Paris — mercredi 4 novembre 2026")
+    page.get_by_role("button", name="Copier et ouvrir SNCF Connect").click()
+    assert page.evaluate("window.__ouverts") == ["https://www.sncf-connect.com/"], page.evaluate("window.__ouverts")
+    expect(page.locator(".seance")).to_contain_text("Recherche copiée.")
+    assert page.evaluate("navigator.clipboard.readText()").endswith("train 6136")
+    page.get_by_role("button", name="Ajouté au panier, train suivant").click()
+    expect(page.get_by_role("heading", level=2, name="Préparer mon panier — train 2 sur 4")).to_be_focused()
+    page.get_by_role("button", name="Passer ce train").click()
+    page.get_by_role("button", name="Ajouté au panier, train suivant").click()
+    expect(page.get_by_role("heading", level=2, name="Préparer mon panier — train 4 sur 4")).to_be_visible()
+    expect(page.locator(".seance")).to_contain_text("Changement de site : Trenitalia (panier séparé).")
+    page.get_by_role("button", name="Copier et ouvrir Trenitalia").click()
+    assert page.evaluate("window.__ouverts")[-1] == "https://www.trenitalia.fr/"
+    page.get_by_role("button", name="Ajouté au panier, train suivant").click()
+    expect(page.get_by_role("heading", level=2, name="Panier prêt")).to_be_focused()
+    expect(page.locator(".seance")).to_contain_text("3 trains dans votre panier SNCF Connect et Trenitalia")
+    shot(page, "panier-pret")
+    page.get_by_role("button", name="Options posées").click()
+    p = attendre_enregistrement(page, lambda p: sum(1 for d in p.get("deplacements", []) for c in ("aller", "retour") if d[c]["statut"] == "option") == 3)
+    statuts = sorted(d[c]["statut"] for d in p["deplacements"] for c in ("aller", "retour"))
+    assert statuts == ["a-reserver", "option", "option", "option"], statuts
+    expect(page.get_by_role("button", name="Préparer mon panier (1 train)")).to_be_visible()
+    assert not errors, errors
+    assert not external, external
+
+
+@scenario("Itération 4 — ouverture des ventes : trajet pas encore en vente signalé, rappel agenda à 5 h 45")
+def ouverture_ventes(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, vue="deplacements", accept_downloads=True, permissions=["clipboard-read", "clipboard-write"])
+    ajouter_deplacement(page, "2027-01-13", "2027-01-15")
+    aller = bloc(page, "Aller")
+    expect(aller).to_contain_text("Pas encore en vente : ouverture le jeudi 12 novembre 2026 vers 5 h 45.")
+    bandeau = page.get_by_role("region", name="Ouvertures des ventes à venir")
+    expect(bandeau).to_contain_text("TGV INOUI : jeudi 12 novembre 2026, vers 5 h 45")
+    expect(bandeau).to_contain_text("2 de vos trajets attendent cette ouverture")
+    expect(page.get_by_role("button", name="Préparer mon panier", exact=False)).to_have_count(0)
+    with page.expect_download() as dl:
+        bandeau.get_by_role("button", name="Me réveiller pour l’ouverture TGV INOUI (.ics)").click()
+    ics = Path(dl.value.path()).read_text(encoding="utf-8")
+    assert "DTSTART;TZID=Europe/Paris:20261112T054500" in ics and "TRIGGER:-PT15M" in ics, ics
+    aller.get_by_text("Être prévenu par SNCF Connect à l’ouverture des ventes").click()
+    expect(aller.locator("details.alerte-sncf .recherche")).to_have_text("Marseille Saint-Charles → Paris Gare de Lyon, aller simple le mercredi 13 janvier 2027")
+    expect(aller).to_contain_text("Alertes réservation › Créer une alerte")
+    aller.get_by_role("button", name="Copier l’alerte").click()
+    assert page.evaluate("navigator.clipboard.readText()").endswith("13 janvier 2027")
+    shot(page, "ouverture-ventes")
+    assert not errors, errors
+
+
+@scenario("Itération 4 — alerte petits prix : prix visé conservé, alerte prête à coller")
+def alerte_petit_prix(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, vue="deplacements")
+    ajouter_deplacement(page, "2026-11-18", "2026-11-20")
+    retour = bloc(page, "Retour")
+    expect(retour.locator(".vente.en-vente")).to_have_text("En vente")
+    retour.get_by_text("Être prévenu par SNCF Connect d’un petit prix").click()
+    expect(retour).to_contain_text("Indiquez le prix visé")
+    retour.get_by_label("Prix visé (€)").fill("35")
+    expect(retour.locator("details.alerte-sncf .recherche")).to_have_text("Paris Gare de Lyon → Marseille Saint-Charles, aller simple le vendredi 20 novembre 2026, budget 35,00 €")
+    expect(retour).to_contain_text("Alerte petits prix › Créer une alerte")
+    attendre_enregistrement(page, lambda p: p.get("deplacements", [{}])[0].get("retour", {}).get("prixCibleCentimes") == 3500)
+    assert not errors, errors
+
+
 def serve() -> ThreadingHTTPServer:
     class Silencieux(SimpleHTTPRequestHandler):
         def log_message(self, *_args) -> None:  # noqa: D401 - journal muet
@@ -670,7 +781,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, seance_panier, ouverture_ventes, alerte_petit_prix, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:
