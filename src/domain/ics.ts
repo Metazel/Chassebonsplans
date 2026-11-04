@@ -3,6 +3,8 @@
  * de la date limite de paiement d'une option posée. Heures en Europe/Paris (VTIMEZONE incluse).
  */
 import type { Deplacement, Trajet } from './deplacements';
+import type { OuvertureAttendue } from './ventes';
+import { dateCourte } from './dates';
 
 const VTIMEZONE = [
   'BEGIN:VTIMEZONE',
@@ -57,7 +59,7 @@ function horodatage(date: string, minutes: number): string {
 
 const jourEntier = (date: string) => date.replace(/-/g, '');
 
-const STATUT_ICS = { 'a-reserver': 'à réserver', option: 'option posée', paye: 'payé' } as const;
+const STATUT_ICS = { 'a-reserver': 'à réserver', panier: 'dans le panier, à payer', option: 'option posée', paye: 'payé' } as const;
 
 function evenementTrajet(d: Deplacement, cote: 'aller' | 'retour', t: Trajet, stamp: string, sequence: number): string[] {
   if (!t.train) return [];
@@ -97,7 +99,29 @@ function rappelOption(d: Deplacement, cote: 'aller' | 'retour', t: Trajet, stamp
 /** Déplacements qui produisent au moins un événement (train choisi ou option datée). */
 export const aExporter = (d: Deplacement) => [d.aller, d.retour].some((t) => t.train || (t.statut === 'option' && t.limiteOption));
 
-export function genererIcs(liste: Deplacement[], maintenant = new Date()): string {
+/** Ouverture des ventes : événement à l'heure indicative (6 h par défaut), alarme 15 min avant. */
+function evenementOuverture(o: OuvertureAttendue, stamp: string, sequence: number): string[] {
+  const debut = o.heure ?? 6 * 60;
+  const trajets = o.trajets.map(({ deplacement: d, cote }) => `${cote} du ${dateCourte(d[cote].date)} (train ${d[cote].train?.numero ?? '?'})`).join(', ');
+  return [
+    'BEGIN:VEVENT',
+    `UID:ouverture-${o.operateur.id}-${o.le}@chassebonsplans`,
+    `DTSTAMP:${stamp}`,
+    `SEQUENCE:${sequence}`,
+    `DTSTART;TZID=Europe/Paris:${horodatage(o.le, debut)}`,
+    `DTEND;TZID=Europe/Paris:${horodatage(o.le, debut + 30)}`,
+    `SUMMARY:${echapper(`Ouverture des ventes ${o.operateur.nom} : ${o.trajets.length} trajet${o.trajets.length > 1 ? 's' : ''} à réserver`)}`,
+    `DESCRIPTION:${echapper(`À réserver dès l'ouverture : ${trajets}. Heure indicative ; source : ${o.operateur.source}`)}`,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${echapper(`Ouverture des ventes ${o.operateur.nom}`)}`,
+    'TRIGGER:-PT15M',
+    'END:VALARM',
+    'END:VEVENT',
+  ];
+}
+
+export function genererIcs(liste: Deplacement[], maintenant = new Date(), ouvertures: OuvertureAttendue[] = []): string {
   const stamp = maintenant.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   // Croissant à chaque export : un nouvel export met à jour les événements au lieu de les dupliquer.
   const sequence = Math.floor(maintenant.getTime() / 60_000);
@@ -107,6 +131,7 @@ export function genererIcs(liste: Deplacement[], maintenant = new Date()): strin
       lignes.push(...evenementTrajet(d, cote, d[cote], stamp, sequence), ...rappelOption(d, cote, d[cote], stamp, sequence));
     }
   }
+  for (const o of ouvertures) lignes.push(...evenementOuverture(o, stamp, sequence));
   lignes.push('END:VCALENDAR');
   return lignes.map(plier).join('\r\n') + '\r\n';
 }

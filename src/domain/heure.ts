@@ -24,3 +24,6 @@ export function formaterHeure(minutes: number): string {
 export function arriveeApresDepart(depart: number, arrivee: number): number {
   return arrivee < depart ? arrivee + MINUTES_PAR_JOUR : arrivee;
 }
+
+/** Heure à la française pour une phrase : 345 → « 5 h 45 ». */
+export const heureEnClair = (minutes: number) => `${Math.floor(minutes / 60) % 24} h ${String(minutes % 60).padStart(2, '0')}`;

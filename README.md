@@ -1,10 +1,14 @@
 # Chasse aux bons plans
 
-Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). À coût égal, le train qui ramène le plus tôt à la maison l'emporte. Version 0.3.0.
+Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). À coût égal, le train qui ramène le plus tôt à la maison l'emporte. Version 0.4.0.
 
 ## Ce que fait l'application
 
-- **Mes déplacements** (écran d'accueil) : indiquez vos jours d'aller et de retour ; l'appli liste les trains de vos créneaux (aller : arrivée 9h00-9h40 ; retour : départ 17h30-20h00), tous opérateurs (TGV INOUI, OUIGO, Intercités, Trenitalia), d'après les horaires théoriques ouverts mis à jour chaque semaine. Elle signale les retours qui font dîner à bord, propose les trains les plus proches un jour sans train dans le créneau (jour férié), puis prépare la réservation : recherche à copier, lien vers le site de vente (aucun pour OUIGO), suivi à réserver / option posée / payé, date limite d'option, prix payé, export agenda .ics avec rappel la veille de la fin d'option. Rien n'est réservé ni payé dans l'appli.
+- **Mes déplacements** (écran d'accueil) : indiquez vos jours d'aller et de retour ; l'appli liste les trains de vos créneaux (aller : arrivée 9h00-9h40 ; retour : départ 17h30-20h00), tous opérateurs (TGV INOUI, OUIGO, Intercités, Trenitalia), d'après les horaires théoriques ouverts mis à jour chaque semaine. Elle signale les retours qui font dîner à bord, propose les trains les plus proches un jour sans train dans le créneau (jour férié), puis prépare la réservation : recherche à copier, lien vers le site de vente (SNCF Connect pour TGV INOUI, OUIGO et Intercités ; trenitalia.fr), suivi à réserver / dans le panier / option posée / payé, date limite d'option, prix payé, export agenda .ics avec rappel la veille de la fin d'option. Rien n'est réservé ni payé dans l'appli.
+- **Réserver mes trains** : une seule liste à cocher, par site de vente puis par aller-retour (une recherche par aller-retour) ; « Panier à finaliser » jusqu'au paiement ou aux options (date limite commune).
+- **Ouvertures des ventes** : chaque trajet pas encore en vente affiche sa date d'ouverture ; bandeau et rappel agenda (alarme avant l'heure indicative). Calendrier sourcé et daté.
+- **Alertes SNCF Connect** : l'appli prépare l'alerte réservation ou petits prix (prix visé) à créer sur son compte SNCF Connect.
+- **Suppression** : bouton en tête de chaque déplacement, sélection multiple.
 - **Comparer** : saisissez 2 à 6 trains retour (départ, arrivée en gare, prix) ; l'appli recommande le meilleur au coût complet et en détaille le calcul. Un train incomplet ou un réglage invalide est signalé, jamais remplacé en silence.
 - **Réglages** : trajet gare → domicile, heure limite du dîner à la maison (heure théorique, sans marge de retard), prix d'un repas à bord, écart toléré (bornes comprises). Valeurs par défaut sourcées et datées.
 - **Mes leviers** : cartes, abonnements, assurance et services détenus (carte Avantage, Liberté, MAX ACTIF, carte Voyageur, Visa Premier, Pass Ulys, Fnac+), avec effet, conditions, source et date de vérification ; fin de validité facultative, alerte à l'expiration.
@@ -12,7 +16,7 @@ Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au 
 
 Les déplacements terminés depuis plus de 24 mois sont effacés automatiquement.
 
-À venir : simulateur carte Avantage avec billets croisés, rappels d'ouverture des ventes, prix réels par la saisie de la page de résultats.
+À venir : simulateur carte Avantage avec billets croisés, prix réels par la saisie de la page de résultats.
 
 ## Vie privée, sécurité, accessibilité
 

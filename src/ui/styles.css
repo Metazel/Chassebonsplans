@@ -153,3 +153,34 @@ fieldset.choix-train { border: none; margin: 0; padding: 0; min-width: 0; }
 select { font: inherit; min-height: 44px; padding: 0.5rem 0.625rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--surface); color: var(--texte); width: 100%; }
 .suivi { margin-top: 0.5rem; }
 form.ajout button[type='submit'] { margin-top: 0.75rem; }
+
+/* Itération 4 : suppression visible, sélection, panier, ouvertures des ventes */
+.tete-deplacement h2 { margin: 0.25rem 0; }
+.actions-deplacement { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; }
+.tete-deplacement label.selection { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; min-width: 44px; padding: 0 0.5rem; font-weight: 400; color: var(--texte-2); border-radius: 8px; cursor: pointer; }
+.tete-deplacement label.selection input { width: 24px; height: 24px; min-height: 24px; margin: 0; accent-color: var(--accent); }
+button.supprimer { margin-top: 0; }
+li.deplacement.selectionne > article { border: 2px solid var(--erreur); }
+.barre-selection { background: var(--surface); border: 2px solid var(--erreur); border-radius: 8px; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem; }
+.barre-selection p { margin: 0 0 0.5rem; font-weight: 600; }
+section.panier, section.ouvertures { background: var(--surface); border: 2px solid var(--accent); border-radius: 12px; padding: 0.25rem 1rem 1rem; margin: 1rem 0; }
+section.ouvertures ul { list-style: none; padding: 0; margin: 0; }
+.vente { margin: 0.25rem 0; }
+.vente.en-vente { color: var(--succes); font-weight: 600; }
+details.alerte-sncf { margin: 0.5rem 0; }
+details.alerte-sncf summary { font-weight: 600; color: var(--lien); }
+ol.etapes { padding-left: 1.25rem; }
+ol.etapes li { margin: 0.5rem 0; }
+ol.etapes button.secondaire, .seance .actions button { margin-top: 0; }
+.site-vente h3 { margin-bottom: 0; }
+ul.liste-panier { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
+ul.liste-panier p.ar { margin: 0 0 0.25rem; font-weight: 600; }
+label.ligne-panier { display: flex; align-items: flex-start; gap: 0.75rem; min-height: 44px; padding: 0.5rem 0.75rem; border: 1px solid var(--bord); border-radius: 8px; margin-bottom: 0.25rem; font-weight: 400; cursor: pointer; overflow-wrap: anywhere; }
+label.ligne-panier:has(input:checked) { border: 2px solid var(--accent); background: var(--retenu); }
+label.ligne-panier input { width: 24px; height: 24px; min-height: 24px; margin: 0.1rem 0 0; flex: none; accent-color: var(--accent); }
+.finaliser { border-top: 2px solid var(--accent); margin-top: 1rem; padding-top: 0.25rem; }
+.option-commune { align-items: end; margin-top: 0.75rem; }
+.option-commune button { margin-top: 0; }
+dl.champs-alerte { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.75rem; margin: 0.5rem 0; }
+dl.champs-alerte dt { font-weight: 600; }
+dl.champs-alerte dd { margin: 0; }

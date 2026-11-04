@@ -152,11 +152,11 @@ describe('préparation de la réservation', () => {
     expect(villeGare('Paris-Gare-de-Lyon')).toBe('Paris Gare de Lyon');
     expect(villeGare('Marseille-St-Charles')).toBe('Marseille Saint Charles');
   });
-  it('site de vente par opérateur : aucun lien pour OUIGO (CGU)', () => {
+  it('site de vente par opérateur : OUIGO sur SNCF Connect (même panier), Trenitalia à part', () => {
     expect(canalVente('TGV INOUI')?.url).toBe('https://www.sncf-connect.com/');
     expect(canalVente('Intercités')?.nom).toBe('SNCF Connect');
     expect(canalVente('Trenitalia (Frecciarossa)')?.url).toBe('https://www.trenitalia.fr/');
-    expect(canalVente('OUIGO')).toBeNull();
+    expect(canalVente('OUIGO')?.url).toBe('https://www.sncf-connect.com/');
   });
   it('clé de train stable et distincte entre sens', () => {
     const t = { sens: 'MP' as const, numero: '6136', operateur: 'TGV INOUI', depart: 363, arrivee: 562 };
