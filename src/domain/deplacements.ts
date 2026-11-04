@@ -7,9 +7,9 @@ import { lireMontant } from './argent';
 import { contientNumeroCarte } from './securite';
 import type { Sens, TrainHoraire } from './horaires';
 
-export type Statut = 'a-reserver' | 'option' | 'paye';
-export const STATUTS: readonly Statut[] = ['a-reserver', 'option', 'paye'];
-export const LIBELLES_STATUT: Record<Statut, string> = { 'a-reserver': 'À réserver', option: 'Option posée', paye: 'Payé' };
+export type Statut = 'a-reserver' | 'panier' | 'option' | 'paye';
+export const STATUTS: readonly Statut[] = ['a-reserver', 'panier', 'option', 'paye'];
+export const LIBELLES_STATUT: Record<Statut, string> = { 'a-reserver': 'À réserver', panier: 'Dans le panier', option: 'Option posée', paye: 'Payé' };
 
 export interface TrainChoisi {
   numero: string;
@@ -26,6 +26,8 @@ export interface Trajet {
   limiteOption?: string;
   /** Prix du billet, en centimes (facultatif ; compté dans le total une fois payé). */
   prixCentimes?: number;
+  /** Prix visé pour une alerte petits prix, en centimes (facultatif). */
+  prixCibleCentimes?: number;
 }
 
 export interface Deplacement {
@@ -80,6 +82,7 @@ function lireTrajet(v: unknown): Trajet | null {
   // La date limite d'une option ne peut pas dépasser le jour du trajet.
   if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;
+  if (Number.isInteger(t.prixCibleCentimes) && (t.prixCibleCentimes as number) > 0 && (t.prixCibleCentimes as number) <= 100_000) trajet.prixCibleCentimes = t.prixCibleCentimes as number;
   return trajet;
 }
 
@@ -134,3 +137,17 @@ export function optionsUrgentes(liste: Deplacement[], aujourdhui: string): { dep
 }
 
 export const sensDu = (cote: 'aller' | 'retour'): Sens => (cote === 'aller' ? 'MP' : 'PM');
+
+/** Change le statut de plusieurs trajets d'un coup (fin de séance panier). */
+export function changerStatuts(liste: Deplacement[], cibles: { id: string; cote: 'aller' | 'retour' }[], statut: Statut): Deplacement[] {
+  return liste.map((d) => {
+    let r = d;
+    for (const c of cibles) {
+      if (c.id !== d.id) continue;
+      const t: Trajet = { ...r[c.cote], statut };
+      if (statut !== 'option') delete t.limiteOption;
+      r = { ...r, [c.cote]: t };
+    }
+    return r;
+  });
+}

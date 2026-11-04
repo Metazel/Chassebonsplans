@@ -1,0 +1,41 @@
+{
+  "version": "2026-11-04",
+  "meta": {
+    "source": "Calendriers publiés par SNCF Connect (aide « L'ouverture des ventes ») et par Trenitalia France (ouverture du 16/09/2026). Heure indicative : vers 5 h 45 lors des dernières ouvertures SNCF, 8 h pour Trenitalia.",
+    "verifieLe": "2026-11-04"
+  },
+  "operateurs": [
+    {
+      "id": "tgv-inoui",
+      "nom": "TGV INOUI",
+      "reconnu": ["inoui", "tgv"],
+      "enVenteJusquau": "2027-01-06",
+      "ouvertures": [{ "le": "2026-11-12", "heure": "05:45", "du": "2027-01-07", "au": "2027-07-02" }],
+      "source": "https://www.sncf-connect.com/aide/l-ouverture-des-ventes"
+    },
+    {
+      "id": "intercites",
+      "nom": "Intercités",
+      "reconnu": ["intercit"],
+      "enVenteJusquau": "2027-01-06",
+      "ouvertures": [{ "le": "2026-11-12", "heure": "05:45", "du": "2027-01-07", "au": "2027-03-31" }],
+      "source": "https://www.sncf-connect.com/aide/l-ouverture-des-ventes"
+    },
+    {
+      "id": "ouigo",
+      "nom": "OUIGO",
+      "reconnu": ["ouigo"],
+      "enVenteJusquau": "2027-07-02",
+      "ouvertures": [],
+      "source": "https://www.sncf-connect.com/aide/l-ouverture-des-ventes"
+    },
+    {
+      "id": "trenitalia",
+      "nom": "Trenitalia",
+      "reconnu": ["trenitalia", "frecciarossa"],
+      "enVenteJusquau": "2027-01-10",
+      "ouvertures": [],
+      "source": "https://www.trenitalia.fr/"
+    }
+  ]
+}

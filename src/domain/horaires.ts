@@ -166,10 +166,12 @@ export const cleTrain = (t: Pick<TrainHoraire, 'sens' | 'numero' | 'operateur' |
 
 export type CanalVente = { nom: string; url: string } | null;
 
-/** Site de vente autorisé par opérateur ; OUIGO : pas de lien (CGU), seulement le numéro et l'horaire. */
+/**
+ * Site de vente par opérateur : SNCF Connect vend TGV INOUI, Intercités et OUIGO (un seul panier) ;
+ * Trenitalia se réserve sur trenitalia.fr. Aucun lien vers ouigo.com (CGU).
+ */
 export function canalVente(operateur: string): CanalVente {
   const o = operateur.toLowerCase();
-  if (o.includes('ouigo')) return null;
   if (o.includes('trenitalia')) return { nom: 'Trenitalia', url: 'https://www.trenitalia.fr/' };
   return { nom: 'SNCF Connect', url: 'https://www.sncf-connect.com/' };
 }
