@@ -39,9 +39,11 @@ import {
   type Trajet,
 } from '../../domain/deplacements';
 import { aExporter, genererIcs } from '../../domain/ics';
-import { etatVente, ouverturesAttendues, type OuvertureAttendue } from '../../domain/ventes';
+import { etatVente, minutesParis, ouverturesAttendues, type OuvertureAttendue } from '../../domain/ventes';
+import { estAReverifier } from '../../domain/referentiel';
+import { listePanier } from '../../domain/panier';
+import { Panier } from '../components/Panier';
 import { OUVERTURES } from '../../data/ouvertures';
-import { SeancePanier, aMettreAuPanier, type ElementPanier } from './SeancePanier';
 import { ExternalLink } from '../components/ExternalLink';
 
 export type EtatHoraires = { etat: 'chargement' } | { etat: 'ok'; horaires: Horaires } | { etat: 'erreur' };
@@ -102,7 +104,8 @@ function LigneTrain({ t, cote, p }: { t: TrainHoraire; cote: Cote; p: Parametres
 
 /** Le trajet est-il en vente ? Sinon, date d'ouverture connue ou non (calendrier daté, sans requête). */
 function EtatVenteTrajet(props: { operateur: string; date: string; aujourdhui: string }) {
-  const e = etatVente(OUVERTURES, props.operateur, props.date, props.aujourdhui);
+  const e = etatVente(OUVERTURES, props.operateur, props.date, props.aujourdhui, minutesParis());
+  if (e.etat === 'non-suivi') return null;
   if (e.etat === 'en-vente') return <p class="vente en-vente">En vente</p>;
   if (e.etat === 'ouverture')
     return (
@@ -111,23 +114,7 @@ function EtatVenteTrajet(props: { operateur: string; date: string; aujourdhui: s
         {e.heure !== undefined && ` vers ${heureEnClair(e.heure)}`}.
       </p>
     );
-  return <p class="alerte vente">Pas encore en vente{e.operateur ? ` : ouverture ${e.operateur.nom} non encore annoncée` : ''}.</p>;
-}
-
-/** Copie un texte et rend compte du résultat (la copie peut être refusée par le navigateur). */
-function useCopie(): [(t: string) => Promise<boolean>, 'ok' | 'echec' | null, () => void] {
-  const [etat, setEtat] = useState<'ok' | 'echec' | null>(null);
-  const copier = async (t: string) => {
-    try {
-      await navigator.clipboard.writeText(t);
-      setEtat('ok');
-      return true;
-    } catch {
-      setEtat('echec');
-      return false;
-    }
-  };
-  return [copier, etat, () => setEtat(null)];
+  return <p class="alerte vente">Ouverture des ventes {e.operateur.nom} non encore annoncée pour cette date : vérifiez sur le site.</p>;
 }
 
 /**
@@ -138,14 +125,17 @@ function AlerteSncf(props: { base: string; trajet: Trajet; cote: Cote; recherche
   const { trajet, base } = props;
   const sens = sensDu(props.cote);
   const choisi = trajet.train;
-  const e = choisi ? etatVente(OUVERTURES, choisi.operateur, trajet.date, props.aujourdhui) : { etat: 'en-vente' as const };
-  const [cible, setCible] = useState(trajet.prixCibleCentimes !== undefined ? String(trajet.prixCibleCentimes / 100).replace('.', ',') : '');
-  const [copier, copie, oublier] = useCopie();
+  const e = choisi ? etatVente(OUVERTURES, choisi.operateur, trajet.date, props.aujourdhui, minutesParis()) : { etat: 'en-vente' as const };
+  const texteCible = (c: number | undefined) => (c !== undefined ? String(c / 100).replace('.', ',') : '');
+  const [cible, setCible] = useState(texteCible(trajet.prixCibleCentimes));
+  // Le champ suit la valeur enregistrée quand elle change ailleurs (autre onglet).
+  useEffect(() => {
+    const v = lirePrix(cible);
+    if (v !== null && (v || undefined) !== trajet.prixCibleCentimes) setCible(texteCible(trajet.prixCibleCentimes));
+  }, [trajet.prixCibleCentimes]);
   const lu = lirePrix(cible);
-  const trajetTexte = `${GARES[sens].depart} → ${GARES[sens].arrivee}, aller simple le ${dateLongue(trajet.date)}`;
-  const reservation = e.etat !== 'en-vente';
-  const texte = reservation ? trajetTexte : lu ? `${trajetTexte}, budget ${formaterMontant(lu)}` : null;
-  useEffect(oublier, [texte]);
+  const reservation = e.etat === 'ouverture' || e.etat === 'inconnu';
+  const pret = reservation || !!lu;
   return (
     <details class="alerte-sncf">
       <summary>Être prévenu par SNCF Connect{reservation ? ' à l’ouverture des ventes' : ' d’un petit prix'}</summary>
@@ -179,31 +169,31 @@ function AlerteSncf(props: { base: string; trajet: Trajet; cote: Cote; recherche
           )}
         </div>
       )}
-      {texte ? (
+      {pret ? (
         <>
-          <p class="recherche">{texte}</p>
-          <ol class="etapes">
-            <li>
-              <button type="button" class="secondaire" onClick={() => void copier(texte)}>
-                Copier l’alerte
-              </button>
-            </li>
-            <li>
-              Sur <ExternalLink href="https://www.sncf-connect.com/">SNCF Connect</ExternalLink>, connecté à votre compte : Compte › Alertes billets disponibles ›{' '}
-              {reservation ? 'Alertes réservation' : 'Alerte petits prix'} › Créer une alerte.
-            </li>
-            <li>Collez le trajet et validez : SNCF Connect vous prévient par e-mail ou notification.</li>
-          </ol>
-          <p class="aide" aria-live="polite">
-            {copie === 'ok' && 'Alerte copiée.'}
-            {copie === 'echec' && 'Copie impossible ici : sélectionnez le texte ci-dessus.'}
+          <p class="aide">Dans le formulaire d’alerte, renseignez :</p>
+          <dl class="champs-alerte">
+            <dt>Départ</dt>
+            <dd>{GARES[sens].depart}</dd>
+            <dt>Arrivée</dt>
+            <dd>{GARES[sens].arrivee}</dd>
+            <dt>Date</dt>
+            <dd>{dateLongue(trajet.date)} (aller simple)</dd>
+            {!reservation && lu && (
+              <>
+                <dt>Budget</dt>
+                <dd>{formaterMontant(lu)}</dd>
+              </>
+            )}
+          </dl>
+          <p>
+            Sur <ExternalLink href="https://www.sncf-connect.com/">SNCF Connect</ExternalLink>, connecté à votre compte : Compte › Alertes billets disponibles ›{' '}
+            {reservation ? 'Alertes réservation' : 'Alerte petits prix'} › Créer une alerte. Vous serez prévenu par e-mail ou notification.
           </p>
+          <p class="aide">Chemin indiqué par l’aide SNCF Connect, vérifié le {dateLongue(OUVERTURES.meta.verifieLe)}.</p>
         </>
       ) : (
         <p class="aide">Indiquez le prix visé pour préparer l’alerte petits prix.</p>
-      )}
-      {choisi && canalVente(choisi.operateur)?.nom !== 'SNCF Connect' && (
-        <p class="aide">Les alertes SNCF Connect surveillent les trains qu’il vend : votre {choisi.operateur} n’en fait pas partie.</p>
       )}
     </details>
   );
@@ -249,7 +239,7 @@ function BlocTrajet(props: {
     : null;
   const canal = choisi ? canalVente(choisi.operateur) : null;
   // Pas encore en vente : inutile de proposer la réservation, l'alerte d'ouverture la remplace.
-  const pasEnVente = !!choisi && trajet.statut === 'a-reserver' && etatVente(OUVERTURES, choisi.operateur, trajet.date, props.aujourdhui).etat !== 'en-vente';
+  const pasEnVente = !!choisi && trajet.statut === 'a-reserver' && etatVente(OUVERTURES, choisi.operateur, trajet.date, props.aujourdhui, minutesParis()).etat === 'ouverture';
   // Le message « copiée » ne vaut que pour la recherche affichée.
   useEffect(() => setCopie(null), [recherche]);
 
@@ -336,7 +326,7 @@ function BlocTrajet(props: {
           </p>
         </div>
       )}
-      {choisi && trajet.statut === 'a-reserver' && trajet.date >= props.aujourdhui && (
+      {choisi && trajet.statut === 'a-reserver' && trajet.date >= props.aujourdhui && canalVente(choisi.operateur).nom === 'SNCF Connect' && (
         <AlerteSncf base={base} trajet={trajet} cote={cote} recherche={recherche ?? ''} aujourdhui={props.aujourdhui} onTrajet={props.onTrajet} />
       )}
       <div class="ligne suivi">
@@ -432,13 +422,15 @@ function CarteDeplacement(props: {
     <li class={props.selectionne ? 'deplacement selectionne' : 'deplacement'}>
       <article aria-labelledby={`${d.id}-titre`}>
         <div class="tete-deplacement">
-          <input type="checkbox" id={`${d.id}-sel`} checked={props.selectionne} onChange={(e) => props.onSelection((e.currentTarget as HTMLInputElement).checked)} />
-          <label for={`${d.id}-sel`} class="sr-only">
-            Sélectionner le déplacement {periode}
-          </label>
           <h2 id={`${d.id}-titre`} tabIndex={-1}>
             Du {dateCourte(d.aller.date)} au {dateCourte(d.retour.date)}
           </h2>
+          <div class="actions-deplacement">
+          <label class="selection" for={`${d.id}-sel`}>
+            <input type="checkbox" id={`${d.id}-sel`} checked={props.selectionne} onChange={(e) => props.onSelection((e.currentTarget as HTMLInputElement).checked)} />
+            <span aria-hidden="true">Sélectionner</span>
+            <span class="sr-only">Sélectionner le déplacement {periode}</span>
+          </label>
           {!confirmer && (
             <button
               type="button"
@@ -453,6 +445,7 @@ function CarteDeplacement(props: {
               Supprimer
             </button>
           )}
+          </div>
         </div>
         {confirmer && (
           <div class="confirmation" role="group" aria-labelledby={`${d.id}-conf`}>
@@ -526,7 +519,6 @@ export function Deplacements(props: {
   const [annonce, setAnnonce] = useState('');
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const [confirmerSelection, setConfirmerSelection] = useState(false);
-  const [seance, setSeance] = useState<ElementPanier[] | null>(null);
   const focusApres = useRef<string | null>(null);
   const h = props.horaires.etat === 'ok' ? props.horaires.horaires : null;
 
@@ -565,9 +557,11 @@ export function Deplacements(props: {
   const aVenir = deplacements.filter((d) => d.retour.date >= aujourdhui);
   const passes = deplacements.filter((d) => d.retour.date < aujourdhui);
   const urgentes = optionsUrgentes(deplacements, aujourdhui);
-  const ouvertures = ouverturesAttendues(OUVERTURES, aVenir, aujourdhui);
+  const maintenant = minutesParis();
+  const ouvertures = ouverturesAttendues(OUVERTURES, aVenir, aujourdhui, maintenant);
   const avecTrain = aVenir.filter(aExporter);
-  const panier = aMettreAuPanier(deplacements, aujourdhui, OUVERTURES);
+  const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES);
+  const calendrierAncien = estAReverifier(OUVERTURES.meta.verifieLe, new Date(), 2);
   const age = h ? ageHoraires(h, aujourdhui) : 0;
 
   const maj = (d: Deplacement) => props.onChange(deplacements.map((x) => (x.id === d.id ? d : x)));
@@ -621,25 +615,6 @@ export function Deplacements(props: {
     </div>
   );
 
-  if (seance) {
-    return (
-      <>
-        <h1 id="titre-vue" tabIndex={-1}>
-          Mes déplacements
-        </h1>
-        <SeancePanier
-          elements={seance}
-          deplacements={deplacements}
-          onStatut={(cibles, statut) => props.onChange(changerStatuts(deplacements, cibles, statut))}
-          onFin={() => {
-            setSeance(null);
-            focusApres.current = 'titre-liste';
-          }}
-        />
-      </>
-    );
-  }
-
   return (
     <>
       <h1 id="titre-vue" tabIndex={-1}>
@@ -677,17 +652,17 @@ export function Deplacements(props: {
           ))}
         </ul>
       )}
-      {panier.length > 0 && (
-        <section class="panier" aria-labelledby="titre-panier">
-          <h2 id="titre-panier">Réserver mes trains</h2>
-          <p>
-            {panier.length} train{panier.length > 1 ? 's' : ''} en vente à réserver. L’outil vous les présente un par un : un bouton copie la recherche et
-            ouvre le site, vous ajoutez au panier, puis vous payez une seule fois.
-          </p>
-          <button type="button" onClick={() => setSeance(panier)}>
-            Préparer mon panier ({panier.length} train{panier.length > 1 ? 's' : ''})
-          </button>
-        </section>
+      <Panier
+        groupes={groupesPanier}
+        deplacements={deplacements}
+        aujourdhui={aujourdhui}
+        onStatut={(cibles, statut, extra) => props.onChange(changerStatuts(deplacements, cibles, statut, extra))}
+        onAnnonce={setAnnonce}
+      />
+      {calendrierAncien && (
+        <p class="alerte" role="status">
+          Calendrier des ouvertures de ventes vérifié le {dateLongue(OUVERTURES.meta.verifieLe)} : il a pu changer, vérifiez sur les sites de vente.
+        </p>
       )}
       <BandeauOuvertures
         ouvertures={ouvertures}
