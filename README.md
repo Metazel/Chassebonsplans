@@ -1,6 +1,6 @@
 # Chasse aux bons plans
 
-Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). À coût égal, le train qui ramène le plus tôt à la maison l'emporte. Version 0.5.0.
+Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). À coût égal, le train qui ramène le plus tôt à la maison l'emporte. Version 0.6.0.
 
 ## Ce que fait l'application
 
@@ -9,6 +9,7 @@ Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au 
 - **Ouvertures des ventes** : chaque trajet pas encore en vente affiche sa date d'ouverture ; bandeau et rappel agenda (alarme avant l'heure indicative). Calendrier sourcé et daté.
 - **Alertes SNCF Connect** : l'appli prépare l'alerte réservation ou petits prix (prix visé) à créer sur son compte SNCF Connect.
 - **Suppression** : bouton en tête de chaque déplacement, sélection multiple.
+- **Prix vus** : saisissez les prix lus sur le site, ou collez la page de résultats (lecture au mieux, à confirmer ; rien n'est envoyé ni conservé) ; l'appli affiche le coût complet de chaque train et recommande le moins cher, à 2 € près le plus tôt ; « Choisir le … » en un geste ; le prix vu devient le prix payé. Prix de plus de 2 jours écartés de la comparaison ; prix oubliés une fois le trajet payé ou passé.
 - **Carte Avantage et billets croisés** : sans la carte, combien de vos trajets en profiteraient (dont grâce au croisement d'une semaine à l'autre), économie maximale et verdict sur un an ; avec la carte déclarée, plan optimal de billets aller-retour à prendre, que suit la liste « Réserver mes trains ». Un billet engagé (au panier, en option, payé) n'est plus réapparié.
 - **Comparer** : saisissez 2 à 6 trains retour (départ, arrivée en gare, prix) ; l'appli recommande le meilleur au coût complet et en détaille le calcul. Un train incomplet ou un réglage invalide est signalé, jamais remplacé en silence.
 - **Réglages** : trajet gare → domicile, heure limite du dîner à la maison (heure théorique, sans marge de retard), prix d'un repas à bord, écart toléré (bornes comprises). Valeurs par défaut sourcées et datées.
@@ -17,7 +18,7 @@ Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au 
 
 Les déplacements terminés depuis plus de 24 mois sont effacés automatiquement.
 
-À venir : prix réels par la saisie de la page de résultats, autres leviers (MAX ACTIF, Liberté) dans le simulateur.
+À venir : autres leviers (MAX ACTIF, Liberté) dans le simulateur, lot 2 (croisière, mariage).
 
 ## Vie privée, sécurité, accessibilité
 
