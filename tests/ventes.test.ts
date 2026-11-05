@@ -94,7 +94,7 @@ describe('ouvertures attendues par mes trajets', () => {
 
 describe('liste « Réserver mes trains »', () => {
   const plat = (liste: Deplacement[], auj = AUJ, maintenant = 10 * 60) =>
-    listePanier(liste, auj, maintenant, OUVERTURES).flatMap((g) => g.deplacements.flatMap((x) => x.cotes.map((c) => `${g.site.nom}:${x.deplacement.id}-${c}`)));
+    listePanier(liste, auj, maintenant, OUVERTURES).flatMap((g) => g.lots.flatMap((l) => l.elements.map((e) => `${g.site.nom}:${e.deplacement.id}-${e.cote}`)));
   it('SNCF Connect d’abord (OUIGO compris), puis Trenitalia ; aller-retour regroupés ; pas encore en vente et passés exclus', () => {
     const liste = [
       dep('d-bbbb', '2026-11-25', '2026-11-27', INOUI, TRENITALIA),
@@ -104,7 +104,7 @@ describe('liste « Réserver mes trains »', () => {
     ];
     expect(plat(liste)).toEqual(['SNCF Connect:d-aaaa-aller', 'SNCF Connect:d-aaaa-retour', 'SNCF Connect:d-bbbb-aller', 'Trenitalia:d-bbbb-retour']);
     const sncf = listePanier(liste, AUJ, 600, OUVERTURES)[0];
-    expect(sncf?.deplacements[0]?.cotes).toEqual(['aller', 'retour']);
+    expect(sncf?.lots[0]?.elements.map((e) => e.cote)).toEqual(['aller', 'retour']);
   });
   it('un train du jour déjà parti n’est plus proposé', () => {
     const liste = [dep('d-aaaa', AUJ, '2026-11-06', INOUI, INOUI)];

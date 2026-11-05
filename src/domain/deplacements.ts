@@ -30,6 +30,8 @@ export interface Trajet {
   prixCibleCentimes?: number;
   /** Jour de mise au panier (statut « panier ») : un panier oublié est signalé. */
   panierLe?: string;
+  /** Billet aller-retour engagé (carte Avantage, billets croisés) : même identifiant sur ses deux trajets. */
+  billet?: string;
 }
 
 export interface Deplacement {
@@ -82,6 +84,7 @@ function lireTrajet(v: unknown): Trajet | null {
   const train = lireTrain(t.train);
   if (train) trajet.train = train;
   if (t.statut === 'panier' && estDateIso(t.panierLe)) trajet.panierLe = t.panierLe;
+  if (typeof t.billet === 'string' && ID.test(t.billet)) trajet.billet = t.billet;
   // La date limite d'une option ne peut pas dépasser le jour du trajet.
   if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;

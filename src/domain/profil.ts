@@ -25,7 +25,12 @@ export interface Profil {
   derniereSauvegarde?: string;
   /** Déplacements planifiés (CU-A, CU-D). */
   deplacements?: Deplacement[];
+  /** Prix habituel d'un trajet sans carte, en centimes, pour estimer l'intérêt de la carte Avantage (CU-C). */
+  prixHabituelCentimes?: number;
 }
+
+/** Prix habituel stockable : entier de 1 centime à 1 000 €. */
+export const prixHabituelValide = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0 && (v as number) <= 100_000;
 
 export const profilVide = (): Profil => ({ version: VERSION_PROFIL, leviers: {} });
 
@@ -92,6 +97,10 @@ export function lireProfil(src: unknown, idsConnus: ReadonlySet<string>): Lectur
     if (deplacements.length) profil.deplacements = deplacements;
     if (n) ecartes.push(n > 1 ? `${n} déplacements` : '1 déplacement');
   }
+  if (r.prixHabituelCentimes !== undefined) {
+    if (prixHabituelValide(r.prixHabituelCentimes)) profil.prixHabituelCentimes = r.prixHabituelCentimes;
+    else ecartes.push('prix habituel');
+  }
   return { profil, ecartes };
 }
 
@@ -112,11 +121,12 @@ export function pourStockage(p: Profil): Profil {
   if (p.derniereSauvegarde && estDateIso(p.derniereSauvegarde)) propre.derniereSauvegarde = p.derniereSauvegarde;
   const { deplacements } = lireDeplacements(p.deplacements ?? []);
   if (deplacements.length) propre.deplacements = deplacements;
+  if (prixHabituelValide(p.prixHabituelCentimes)) propre.prixHabituelCentimes = p.prixHabituelCentimes;
   return propre;
 }
 
 export function aDesDonnees(p: Profil): boolean {
-  return Object.values(p.leviers).some((l) => l.detenu) || p.reglages !== undefined || (p.deplacements?.length ?? 0) > 0;
+  return Object.values(p.leviers).some((l) => l.detenu) || p.reglages !== undefined || (p.deplacements?.length ?? 0) > 0 || p.prixHabituelCentimes !== undefined;
 }
 
 /** Contenu du fichier de sauvegarde (EXG-04). */

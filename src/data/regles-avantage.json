@@ -1,0 +1,20 @@
+{
+  "version": "2026-10-31",
+  "levier": "carte-avantage-adulte",
+  "prixCarteCentimes": 4900,
+  "reductionPourcent": 30,
+  "nuitsEligibles": [4, 5, 6],
+  "joursSimplesEligibles": [5, 6],
+  "ecartMaxJours": 61,
+  "operateursEligibles": ["inoui", "intercit"],
+  "plafonds": [
+    { "dureeMaxMin": 89, "centimes": 4900 },
+    { "dureeMaxMin": 180, "centimes": 6900 },
+    { "dureeMaxMin": null, "centimes": 8900 }
+  ],
+  "meta": {
+    "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/carte-avantage/carte-avantage-adulte/",
+    "verifieLe": "2026-10-31",
+    "notes": "Nuits : 4 = vendredi, 5 = samedi, 6 = dimanche (0 = lundi). Aller simple éligible le samedi ou le dimanche. Plafonds sur trajets directs en 2de classe, « en vigueur pour le moment » selon la SNCF. Billets croisés : chaque aller-retour réservé respecte les conditions."
+  }
+}

@@ -11,6 +11,7 @@ import { purger, type Deplacement } from '../domain/deplacements';
 import { lireReglages } from '../domain/saisie';
 import { REFERENTIEL_COUT } from '../data/parametres';
 import { chargerHoraires } from '../state/horaires';
+import { REGLES_AVANTAGE } from '../data/avantage';
 
 type Vue = 'deplacements' | 'comparer' | 'leviers' | 'donnees';
 const VUES: { id: Vue; libelle: string; titre: string }[] = [
@@ -163,6 +164,10 @@ export function App() {
     void enregistrer({ ...profilRef.current, leviers });
   };
 
+  const avantageDeclaree = (p: Profil) => {
+    const e = p.leviers[REGLES_AVANTAGE.levier];
+    return e?.detenu ? (e.finValidite ? { detenue: true, finValidite: e.finValidite } : { detenue: true }) : { detenue: false };
+  };
   const setDeplacements = (liste: Deplacement[]) => {
     const p: Profil = { ...profilRef.current };
     if (liste.length) p.deplacements = liste;
@@ -234,7 +239,21 @@ export function App() {
           </p>
         )}
         {stockage && vue === 'deplacements' && (
-          <Deplacements deplacements={profil.deplacements ?? []} horaires={horaires} parametres={parametres} aujourdhui={aujourdhui} onChange={setDeplacements} />
+          <Deplacements
+            deplacements={profil.deplacements ?? []}
+            horaires={horaires}
+            parametres={parametres}
+            aujourdhui={aujourdhui}
+            onChange={setDeplacements}
+            avantage={avantageDeclaree(profil)}
+            {...(profil.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: profil.prixHabituelCentimes } : {})}
+            onPrixHabituel={(c) => {
+              const p: Profil = { ...profilRef.current };
+              if (c === undefined) delete p.prixHabituelCentimes;
+              else p.prixHabituelCentimes = c;
+              void enregistrer(p);
+            }}
+          />
         )}
         {stockage && vue === 'comparer' && <Comparateur lignes={lignes} setLignes={setLignesEtat} reglages={reglages} setReglages={setReglages} resumeLeviers={resumeLeviers} />}
         {stockage && vue === 'leviers' && <Leviers profil={profil} aujourdhui={aujourdhui} onChange={setLevier} />}

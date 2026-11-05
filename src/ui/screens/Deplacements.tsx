@@ -43,6 +43,9 @@ import { etatVente, minutesParis, ouverturesAttendues, type OuvertureAttendue } 
 import { estAReverifier } from '../../domain/referentiel';
 import { listePanier } from '../../domain/panier';
 import { Panier } from '../components/Panier';
+import { Avantage } from '../components/Avantage';
+import { figerBillets, planifier } from '../../domain/croises';
+import { REGLES_AVANTAGE } from '../../data/avantage';
 import { OUVERTURES } from '../../data/ouvertures';
 import { ExternalLink } from '../components/ExternalLink';
 
@@ -511,6 +514,10 @@ export function Deplacements(props: {
   parametres: ParametresCout;
   aujourdhui: string;
   onChange: (liste: Deplacement[]) => void;
+  /** Carte Avantage déclarée dans Mes leviers (et sa fin de validité). */
+  avantage: { detenue: boolean; finValidite?: string };
+  prixHabituelCentimes?: number;
+  onPrixHabituel: (centimes: number | undefined) => void;
 }) {
   const { deplacements, aujourdhui } = props;
   const [aller, setAller] = useState('');
@@ -560,11 +567,19 @@ export function Deplacements(props: {
   const maintenant = minutesParis();
   const ouvertures = ouverturesAttendues(OUVERTURES, aVenir, aujourdhui, maintenant);
   const avecTrain = aVenir.filter(aExporter);
-  const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES);
+  const carteActive = props.avantage.detenue && (!props.avantage.finValidite || props.avantage.finValidite >= aujourdhui);
+  const plan = planifier(REGLES_AVANTAGE, deplacements, aujourdhui, {
+    maintenant,
+    ouvertures: OUVERTURES,
+    ...(carteActive && props.avantage.finValidite ? { finValidite: props.avantage.finValidite } : {}),
+  });
+  // Avec la carte, un aller-retour du plan dont un trajet quitte « à réserver » est figé : le plan ne le réapparie plus.
+  const changer = (liste: Deplacement[]) => props.onChange(carteActive ? figerBillets(plan, liste, nouvelId) : liste);
+  const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES, carteActive ? plan : undefined);
   const calendrierAncien = estAReverifier(OUVERTURES.meta.verifieLe, new Date(), 2);
   const age = h ? ageHoraires(h, aujourdhui) : 0;
 
-  const maj = (d: Deplacement) => props.onChange(deplacements.map((x) => (x.id === d.id ? d : x)));
+  const maj = (d: Deplacement) => changer(deplacements.map((x) => (x.id === d.id ? d : x)));
   const retirer = (d: Deplacement) => {
     setAnnonce(`Déplacement supprimé : du ${dateCourte(d.aller.date)} au ${dateCourte(d.retour.date)}`);
     focusApres.current = 'titre-liste';
@@ -656,8 +671,16 @@ export function Deplacements(props: {
         groupes={groupesPanier}
         deplacements={deplacements}
         aujourdhui={aujourdhui}
-        onStatut={(cibles, statut, extra) => props.onChange(changerStatuts(deplacements, cibles, statut, extra))}
+        onStatut={(cibles, statut, extra) => changer(changerStatuts(deplacements, cibles, statut, extra))}
         onAnnonce={setAnnonce}
+      />
+      <Avantage
+        plan={plan}
+        detenue={carteActive}
+        expiree={props.avantage.detenue && !carteActive}
+        {...(props.avantage.finValidite ? { finValidite: props.avantage.finValidite } : {})}
+        {...(props.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: props.prixHabituelCentimes } : {})}
+        onPrixHabituel={props.onPrixHabituel}
       />
       {calendrierAncien && (
         <p class="alerte" role="status">
