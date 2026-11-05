@@ -184,3 +184,10 @@ label.ligne-panier input { width: 24px; height: 24px; min-height: 24px; margin: 
 dl.champs-alerte { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.75rem; margin: 0.5rem 0; }
 dl.champs-alerte dt { font-weight: 600; }
 dl.champs-alerte dd { margin: 0; }
+
+/* Itération 5 : carte Avantage et billets croisés */
+section.avantage { background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; padding: 0.25rem 1rem 1rem; margin: 1rem 0; }
+ul.billets { padding-left: 1.25rem; }
+ul.billets li { margin: 0.4rem 0; overflow-wrap: anywhere; }
+ul.billets li.hors-carte { color: var(--texte-2); }
+p.estimation { font-size: 1.05rem; }

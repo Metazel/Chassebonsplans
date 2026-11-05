@@ -43,6 +43,9 @@ import { etatVente, minutesParis, ouverturesAttendues, type OuvertureAttendue } 
 import { estAReverifier } from '../../domain/referentiel';
 import { listePanier } from '../../domain/panier';
 import { Panier } from '../components/Panier';
+import { Avantage } from '../components/Avantage';
+import { planifier } from '../../domain/croises';
+import { REGLES_AVANTAGE } from '../../data/avantage';
 import { OUVERTURES } from '../../data/ouvertures';
 import { ExternalLink } from '../components/ExternalLink';
 
@@ -511,6 +514,10 @@ export function Deplacements(props: {
   parametres: ParametresCout;
   aujourdhui: string;
   onChange: (liste: Deplacement[]) => void;
+  /** Carte Avantage déclarée dans Mes leviers (et sa fin de validité). */
+  avantage: { detenue: boolean; finValidite?: string };
+  prixHabituelCentimes?: number;
+  onPrixHabituel: (centimes: number | undefined) => void;
 }) {
   const { deplacements, aujourdhui } = props;
   const [aller, setAller] = useState('');
@@ -560,7 +567,9 @@ export function Deplacements(props: {
   const maintenant = minutesParis();
   const ouvertures = ouverturesAttendues(OUVERTURES, aVenir, aujourdhui, maintenant);
   const avecTrain = aVenir.filter(aExporter);
-  const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES);
+  const carteActive = props.avantage.detenue && (!props.avantage.finValidite || props.avantage.finValidite >= aujourdhui);
+  const plan = planifier(REGLES_AVANTAGE, deplacements, aujourdhui);
+  const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES, carteActive ? plan : undefined);
   const calendrierAncien = estAReverifier(OUVERTURES.meta.verifieLe, new Date(), 2);
   const age = h ? ageHoraires(h, aujourdhui) : 0;
 
@@ -658,6 +667,13 @@ export function Deplacements(props: {
         aujourdhui={aujourdhui}
         onStatut={(cibles, statut, extra) => props.onChange(changerStatuts(deplacements, cibles, statut, extra))}
         onAnnonce={setAnnonce}
+      />
+      <Avantage
+        plan={plan}
+        detenue={carteActive}
+        {...(props.avantage.finValidite ? { finValidite: props.avantage.finValidite } : {})}
+        {...(props.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: props.prixHabituelCentimes } : {})}
+        onPrixHabituel={props.onPrixHabituel}
       />
       {calendrierAncien && (
         <p class="alerte" role="status">
