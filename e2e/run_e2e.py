@@ -577,8 +577,12 @@ def deplacement_suppression(browser: Browser) -> None:
     # Le bouton est dans l'en-tête du déplacement, juste après son titre (visible sans défiler).
     supprimer = page.get_by_role("button", name="Supprimer le déplacement du mer. 4 nov. au ven. 6 nov.")
     titre = page.get_by_role("heading", level=2, name="Du mer. 4 nov. au ven. 6 nov.")
-    premier_trajet = page.locator("li.deplacement").first.get_by_role("heading", level=3).first
-    assert titre.bounding_box()["y"] < supprimer.bounding_box()["y"] < premier_trajet.bounding_box()["y"], "bouton Supprimer pas en tête du déplacement"
+    expect(titre).to_be_visible()
+    # Positions lues en une seule fois : la page peut défiler entre deux lectures (focus sur le titre).
+    ordre = page.locator("li.deplacement").first.evaluate(
+        "li => [li.querySelector('h2'), li.querySelector('button.supprimer'), li.querySelector('h3')].map((e) => e.getBoundingClientRect().top)"
+    )
+    assert ordre[0] < ordre[1] < ordre[2], f"bouton Supprimer pas en tête du déplacement : {ordre}"
     supprimer.click()
     expect(page.get_by_role("button", name="Annuler")).to_be_focused()
     page.get_by_role("button", name="Annuler").click()
