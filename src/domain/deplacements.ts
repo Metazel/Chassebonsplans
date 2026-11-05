@@ -6,6 +6,7 @@ import { ajouterMois, ecartJours, estDateIso } from './dates';
 import { lireMontant } from './argent';
 import { contientNumeroCarte } from './securite';
 import type { Sens, TrainHoraire } from './horaires';
+import { lirePrixVus, type PrixVu } from './prix';
 
 export type Statut = 'a-reserver' | 'panier' | 'option' | 'paye';
 export const STATUTS: readonly Statut[] = ['a-reserver', 'panier', 'option', 'paye'];
@@ -32,6 +33,8 @@ export interface Trajet {
   panierLe?: string;
   /** Billet aller-retour engagé (carte Avantage, billets croisés) : même identifiant sur ses deux trajets. */
   billet?: string;
+  /** Prix vus sur le site de vente, par train. */
+  prixVus?: PrixVu[];
 }
 
 export interface Deplacement {
@@ -85,6 +88,8 @@ function lireTrajet(v: unknown): Trajet | null {
   if (train) trajet.train = train;
   if (t.statut === 'panier' && estDateIso(t.panierLe)) trajet.panierLe = t.panierLe;
   if (typeof t.billet === 'string' && ID.test(t.billet)) trajet.billet = t.billet;
+  const prixVus = lirePrixVus(t.prixVus);
+  if (prixVus) trajet.prixVus = prixVus;
   // La date limite d'une option ne peut pas dépasser le jour du trajet.
   if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;
@@ -115,7 +120,8 @@ export function lireDeplacements(v: unknown): { deplacements: Deplacement[]; eca
 /** EXG-03 : déplacements dont le retour date de plus de `mois` mois. */
 export function purger(liste: Deplacement[], aujourdhui: string, mois = 24): Deplacement[] {
   const limite = ajouterMois(aujourdhui, -mois);
-  return liste.filter((d) => d.retour.date >= limite);
+  const gardes = liste.filter((d) => d.retour.date >= limite);
+  return gardes.length === liste.length ? liste : gardes;
 }
 
 export const trier = (liste: Deplacement[]) => [...liste].sort((a, b) => a.aller.date.localeCompare(b.aller.date) || a.id.localeCompare(b.id));
@@ -163,8 +169,35 @@ export function changerStatuts(
       delete t.panierLe;
       if (statut === 'panier' && extra.le) t.panierLe = extra.le;
       if (statut === 'option' && extra.limiteOption) t.limiteOption = extra.limiteOption < t.date ? extra.limiteOption : t.date;
+      if (statut === 'paye') payer(t);
       r = { ...r, [c.cote]: t };
     }
     return r;
   });
+}
+
+/** Passage à « payé » : le prix vu du train devient le prix payé s'il n'y en a pas, puis les prix vus sont oubliés. */
+export function payer(t: Trajet): void {
+  const vu = t.train ? t.prixVus?.find((p) => p.train === `${t.train!.numero}|${t.train!.depart}`) : undefined;
+  if (t.prixCentimes === undefined && vu) t.prixCentimes = vu.centimes;
+  delete t.prixVus;
+}
+
+/** Minimisation : les prix vus d'un trajet passé ou payé ne servent plus, ils sont effacés. */
+export function nettoyerPrixVus(liste: Deplacement[], aujourdhui: string): Deplacement[] {
+  let change = false;
+  const res = liste.map((d) => {
+    let r = d;
+    for (const cote of ['aller', 'retour'] as const) {
+      const t = r[cote];
+      if (t.prixVus && (t.date < aujourdhui || t.statut === 'paye')) {
+        const copie = { ...t };
+        delete copie.prixVus;
+        r = { ...r, [cote]: copie };
+        change = true;
+      }
+    }
+    return r;
+  });
+  return change ? res : liste;
 }

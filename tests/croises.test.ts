@@ -130,7 +130,7 @@ describe('estimation', () => {
   const plan = planifier(R, [dep('d-aaaa', '2026-11-09', '2026-11-11'), dep('d-bbbb', '2026-11-16', '2026-11-18')], AUJ);
   it('durée type : médiane des trajets du plan', () => expect(dureeType(plan)).toBe(199));
   it('prix habituel 100 € : jusqu’à 30 € par trajet, 120 € sur 4 trajets, carte remboursée dès 2 trajets', () => {
-    expect(estimer(R, plan, 10000)).toEqual({ economieCentimes: 12000, parTrajetCentimes: 3000, seuilTrajets: 2 });
+    expect(estimer(R, plan, 10000)).toEqual({ economieCentimes: 12000, parTrajetCentimes: 3000, seuilTrajets: 2, estimes: 4, aPrixVu: 0 });
   });
   it('prix habituel 140 € : plafond à 89 € pour un trajet de plus de 3 h, 51 € par trajet', () => {
     expect(estimer(R, plan, 14000).parTrajetCentimes).toBe(5100);

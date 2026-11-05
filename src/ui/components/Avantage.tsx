@@ -7,7 +7,7 @@ import { dateCourte, dateLongue } from '../../domain/dates';
 import { formaterHeure } from '../../domain/heure';
 import { formaterMontant } from '../../domain/argent';
 import { lirePrix } from '../../domain/deplacements';
-import { dureeType, estimer, plafond, projectionAnnuelle, type Billet, type Jambe, type PlanAvantage } from '../../domain/croises';
+import { dureeType, estimer, jambesCouvertes, plafond, projectionAnnuelle, type Billet, type Jambe, type PlanAvantage } from '../../domain/croises';
 import { estAReverifier } from '../../domain/referentiel';
 import { REGLES_AVANTAGE as R } from '../../data/avantage';
 import { ExternalLink } from './ExternalLink';
@@ -66,9 +66,13 @@ export function Avantage(props: {
   const lu = lirePrix(prix);
   const prixOk = lu !== null && (lu === undefined || lu <= 100_000);
   const duree = dureeType(plan);
-  const estimation = lu && prixOk ? estimer(R, plan, lu) : null;
+  const estimation = prixOk ? estimer(R, plan, lu || undefined) : null;
+  // Prix de référence pour l'année : le prix habituel saisi, sinon la moyenne des prix vus sur le site.
+  // Seuls les trajets couverts par la carte (pas OUIGO ni les billets hors carte) servent de référence.
+  const vus = jambesCouvertes(plan).flatMap((j) => (j.prixVuCentimes !== undefined ? [j.prixVuCentimes] : []));
+  const reference = lu || (vus.length ? Math.round(vus.reduce((a, b) => a + b, 0) / vus.length) : undefined);
   const arParAn = /^\d{1,3}$/.test(ar.trim()) ? Number(ar) : null;
-  const projection = lu && prixOk && arParAn !== null && arParAn <= 60 ? projectionAnnuelle(R, lu, arParAn, duree) : null;
+  const projection = reference && prixOk && arParAn !== null && arParAn <= 60 ? projectionAnnuelle(R, reference, arParAn, duree) : null;
   const reglesAnciennes = estAReverifier(R.meta.verifieLe, new Date());
   const dates = plan.billets.flatMap((b) => (b.type === 'ar' ? [b.retour.date] : b.type === 'simple' ? [b.jambe.date] : []));
   const expireAvant = props.detenue && props.finValidite && dates.some((d) => d > props.finValidite!);
@@ -155,12 +159,14 @@ export function Avantage(props: {
             )}
           </div>
           <div class="estimation" aria-live="polite">
-            {estimation && plan.eligibles > 0 && (
+            {estimation && estimation.estimes > 0 && (
               <p>
-                Sur vos trajets planifiés : jusqu’à <strong>{formaterMontant(estimation.economieCentimes)}</strong> d’économie ({plan.eligibles} trajet
-                {plan.eligibles > 1 ? 's' : ''}, jusqu’à {formaterMontant(estimation.parTrajetCentimes)} par trajet).
+                Sur vos trajets planifiés : jusqu’à <strong>{formaterMontant(estimation.economieCentimes)}</strong> d’économie ({estimation.estimes} trajet
+                {estimation.estimes > 1 ? 's' : ''}, jusqu’à {formaterMontant(estimation.parTrajetCentimes)} par trajet
+                {estimation.aPrixVu > 0 && `, dont ${estimation.aPrixVu} estimé${estimation.aPrixVu > 1 ? 's' : ''} sur le prix vu sur le site`}).
               </p>
             )}
+            {projection && !lu && <p class="aide">Projection sur un an faite avec la moyenne de vos prix vus ({formaterMontant(reference!)}).</p>}
             {projection &&
               (projection.netCentimes > 0 ? (
                 <p>
