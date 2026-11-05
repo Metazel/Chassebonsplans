@@ -94,6 +94,8 @@ export interface Jambe {
   ouvertureLe?: string;
   /** Billet déjà engagé (au panier, en option ou payé) : identifiant partagé avec l'autre trajet. */
   billet?: string;
+  /** Prix vu sur le site de vente pour le train choisi, en centimes. */
+  prixVuCentimes?: number;
   /** Statut du trajet. */
   statut: string;
 }
@@ -140,6 +142,8 @@ export function jambesDe(liste: Deplacement[], aujourdhui: string, o: OptionsPla
         j.arrivee = t.train.arrivee;
         j.operateur = t.train.operateur;
         j.numero = t.train.numero;
+        const vu = t.prixVus?.find((x) => x.train === `${t.train!.numero}|${t.train!.depart}`);
+        if (vu) j.prixVuCentimes = vu.centimes;
         if (o.ouvertures && t.statut === 'a-reserver') {
           const e = etatVente(o.ouvertures, t.train.operateur, t.date, aujourdhui, o.maintenant);
           if (e.etat === 'ouverture') j.ouvertureLe = e.le;
@@ -276,26 +280,38 @@ const jambesCouvertes = (plan: PlanAvantage) =>
   plan.billets.flatMap((b) => (b.type === 'ar' ? [b.aller, b.retour].filter(aReserver) : b.type === 'simple' ? [b.jambe] : []));
 
 export interface Estimation {
-  /** Économie maximale sur les trajets éligibles du plan (−30 % ou plafond, trajet par trajet). */
+  /** Économie maximale sur les trajets éligibles du plan dont un prix est connu (−30 % ou plafond, trajet par trajet). */
   economieCentimes: number;
-  /** Économie maximale moyenne par trajet éligible. */
+  /** Économie maximale moyenne par trajet estimé. */
   parTrajetCentimes: number;
   /** Trajets éligibles nécessaires pour rembourser la carte (null si aucune économie). */
   seuilTrajets: number | null;
+  /** Trajets estimés, et parmi eux ceux estimés sur le prix vu sur le site. */
+  estimes: number;
+  aPrixVu: number;
 }
 
 /** Durée par défaut d'un Marseille ↔ Paris direct quand le train n'est pas choisi (3 h 15). */
 export const DUREE_DEFAUT = 195;
 
 /**
- * Estimation maximale à partir d'un prix habituel sans carte : chaque trajet éligible coûterait au plus
- * le moins cher de « −30 % » et du plafond de sa durée. Maximum : un prix déjà réduit (Prems) baisse moins.
+ * Estimation maximale : chaque trajet éligible coûterait au plus le moins cher de « −30 % » et du plafond de sa durée,
+ * à partir du prix vu sur le site pour ce train, sinon du prix habituel saisi. Maximum : un prix déjà réduit
+ * (Prems) baisse moins.
  */
-export function estimer(r: ReglesAvantage, plan: PlanAvantage, prixHabituelCentimes: number): Estimation {
-  const gains = jambesCouvertes(plan).map((j) => Math.max(0, prixHabituelCentimes - prixAvecCarte(r, prixHabituelCentimes, dureeDe(j) ?? DUREE_DEFAUT)));
+export function estimer(r: ReglesAvantage, plan: PlanAvantage, prixHabituelCentimes?: number): Estimation {
+  const gains: number[] = [];
+  let aPrixVu = 0;
+  for (const j of jambesCouvertes(plan)) {
+    const prix = j.prixVuCentimes ?? prixHabituelCentimes;
+    if (prix === undefined) continue;
+    if (j.prixVuCentimes !== undefined) aPrixVu++;
+    gains.push(Math.max(0, prix - prixAvecCarte(r, prix, dureeDe(j) ?? DUREE_DEFAUT)));
+  }
   const total = gains.reduce((a, b) => a + b, 0);
-  const moyen = gains.length ? Math.round(total / gains.length) : Math.max(0, prixHabituelCentimes - prixAvecCarte(r, prixHabituelCentimes, DUREE_DEFAUT));
-  return { economieCentimes: total, parTrajetCentimes: moyen, seuilTrajets: moyen > 0 ? Math.ceil(r.prixCarteCentimes / moyen) : null };
+  const defaut = prixHabituelCentimes !== undefined ? Math.max(0, prixHabituelCentimes - prixAvecCarte(r, prixHabituelCentimes, DUREE_DEFAUT)) : 0;
+  const moyen = gains.length ? Math.round(total / gains.length) : defaut;
+  return { economieCentimes: total, parTrajetCentimes: moyen, seuilTrajets: moyen > 0 ? Math.ceil(r.prixCarteCentimes / moyen) : null, estimes: gains.length, aPrixVu };
 }
 
 /**

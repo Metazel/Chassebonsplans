@@ -6,6 +6,7 @@ import { ajouterMois, ecartJours, estDateIso } from './dates';
 import { lireMontant } from './argent';
 import { contientNumeroCarte } from './securite';
 import type { Sens, TrainHoraire } from './horaires';
+import { lirePrixVus, type PrixVu } from './prix';
 
 export type Statut = 'a-reserver' | 'panier' | 'option' | 'paye';
 export const STATUTS: readonly Statut[] = ['a-reserver', 'panier', 'option', 'paye'];
@@ -32,6 +33,8 @@ export interface Trajet {
   panierLe?: string;
   /** Billet aller-retour engagé (carte Avantage, billets croisés) : même identifiant sur ses deux trajets. */
   billet?: string;
+  /** Prix vus sur le site de vente, par train. */
+  prixVus?: PrixVu[];
 }
 
 export interface Deplacement {
@@ -85,6 +88,8 @@ function lireTrajet(v: unknown): Trajet | null {
   if (train) trajet.train = train;
   if (t.statut === 'panier' && estDateIso(t.panierLe)) trajet.panierLe = t.panierLe;
   if (typeof t.billet === 'string' && ID.test(t.billet)) trajet.billet = t.billet;
+  const prixVus = lirePrixVus(t.prixVus);
+  if (prixVus) trajet.prixVus = prixVus;
   // La date limite d'une option ne peut pas dépasser le jour du trajet.
   if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;
