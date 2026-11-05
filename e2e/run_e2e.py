@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 import json
+import re
 import os
 import sys
 import threading
@@ -240,6 +241,7 @@ def accessibilite(browser: Browser) -> None:
         ajouter_deplacement(page, "2026-11-16", "2026-11-18")  # croisement possible avec la semaine du 9
         page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")  # estimation Avantage
         page.get_by_text("Voir comment croiser les billets").click()
+        page.get_by_text("Saisir les prix vus sur le site").first.click()  # saisie des prix et collage
         violations = axe(page)
         shot(page, f"axe-{scheme}-panier")
         assert not violations, f"{scheme} panier: {violations}"
@@ -484,8 +486,8 @@ def deplacement_ajout(browser: Browser) -> None:
     expect(retour.get_by_role("radio")).to_have_count(6)
     expect(retour.get_by_role("radio", name="17:38 → 20:57 TGV INOUI 6123 · chez vous vers 21:12")).to_be_checked()
     expect(retour.get_by_role("radio", name="18:18 → 21:53 Trenitalia (Frecciarossa) 6119", exact=False)).to_be_visible()
-    expect(retour.locator("label", has_text="6119")).to_contain_text("dîner à bord")
-    expect(retour.locator("label", has_text="6153")).not_to_contain_text("dîner à bord")
+    expect(retour.locator(".option-train label", has_text="6119")).to_contain_text("dîner à bord")
+    expect(retour.locator(".option-train label", has_text="6153")).not_to_contain_text("dîner à bord")
     expect(page.get_by_role("heading", name="Sources des horaires")).to_be_visible()
     retour.get_by_role("radio", name="18:10 → 21:16 TGV INOUI 6153", exact=False).check()
     attendre_enregistrement(page, lambda p: len(p.get("deplacements", [])) == 1 and p["deplacements"][0]["retour"].get("train", {}).get("numero") == "6153")
@@ -820,6 +822,43 @@ def avantage_plan(browser: Browser) -> None:
     assert not errors, errors
 
 
+@scenario("Itération 6 — prix vus : saisie, collage de la page de résultats, recommandation au coût complet")
+def prix_reels(browser: Browser) -> None:
+    page, errors, external = new_page(browser, vue="deplacements")
+    ajouter_deplacement(page, "2026-11-04", "2026-11-06")
+    retour = bloc(page, "Retour")
+    retour.get_by_text("Saisir les prix vus sur le site").click()
+    retour.get_by_label("17:38 · TGV INOUI 6123 (€)").fill("40")
+    retour.get_by_label("18:38 · TGV INOUI 6127 (€)").fill("30")
+    reco = retour.locator(".recommandation")
+    # Cas « le sandwich » : 6127 à 30 € + 10 € de dîner à bord = 40 €, à égalité avec le 6123 qui ramène plus tôt.
+    expect(reco).to_contain_text("TGV INOUI 6123 à 17:38, 40,00 €")
+    expect(reco).to_contain_text("À 2,00 € près du 6127, il vous ramène plus tôt.")
+    expect(reco).to_contain_text("C’est votre train choisi.")
+    expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_have_accessible_name(re.compile(r"30,00\s€, coût complet 40,00\s€"))
+    retour.get_by_label("17:38 · TGV INOUI 6123 (€)").fill("45")
+    expect(reco).to_contain_text("TGV INOUI 6127 à 18:38, 40,00 € dont 10,00 € de dîner à bord. C’est le moins cher.")
+    reco.get_by_role("button", name="Choisir le 6127").click()
+    expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_be_checked()
+    aller = bloc(page, "Aller")
+    aller.get_by_text("Saisir les prix vus sur le site").click()
+    aller.get_by_label("Ou collez la page de résultats").fill("06:03\nMarseille Saint-Charles\n3h19\n09:22\nTGV INOUI\nà partir de\n45,00 €\n06:19\n3h20\n09:39\nOUIGO\n29 €\n")
+    aller.get_by_role("button", name="Lire les prix").click()
+    lecture = aller.locator(".lecture")
+    expect(lecture).to_contain_text("2 prix trouvés : vérifiez avant d’appliquer.")
+    expect(lecture).to_contain_text("06:19 · OUIGO 7804 : 29,00 €")
+    lecture.get_by_role("button", name="Appliquer ces prix").click()
+    expect(aller.get_by_label("06:19 · OUIGO 7804 (€)")).to_have_value("29,00")
+    aller.locator(".recommandation").get_by_role("button", name="Choisir le 7804").click()
+    aller.get_by_label("Réservation", exact=False).select_option("paye")
+    expect(aller.get_by_label("Prix payé (€, facultatif)")).to_have_value("29,00")
+    p = attendre_enregistrement(page, lambda p: p["deplacements"][0]["aller"].get("prixCentimes") == 2900)
+    assert {x["train"]: x["centimes"] for x in p["deplacements"][0]["retour"]["prixVus"]} == {"6123|1058": 4500, "6127|1118": 3000}, p
+    shot(page, "prix-reels")
+    assert not errors, errors
+    assert not external, external
+
+
 def serve() -> ThreadingHTTPServer:
     class Silencieux(SimpleHTTPRequestHandler):
         def log_message(self, *_args) -> None:  # noqa: D401 - journal muet
@@ -842,7 +881,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, prix_reels, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:
