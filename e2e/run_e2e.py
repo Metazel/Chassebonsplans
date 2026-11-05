@@ -774,8 +774,12 @@ def avantage_interet(browser: Browser) -> None:
     ajouter_deplacement(page, "2026-11-16", "2026-11-18")
     expect(zone).to_contain_text("4 de vos 4 trajets à réserver profiteraient de la carte (−30 %, prix plafonné à 89,00 € par trajet), dont 4 grâce aux billets croisés.")
     zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")
-    expect(zone.locator(".estimation")).to_contain_text("Économie estimée : 120,00 € sur ces 4 trajets (30,00 € par trajet)")
-    expect(zone.locator(".estimation")).to_contain_text("remboursée dès 2 trajets éligibles")
+    expect(zone.locator(".estimation")).to_contain_text("Sur vos trajets planifiés : jusqu’à 120,00 € d’économie (4 trajets, jusqu’à 30,00 € par trajet).")
+    expect(zone.locator(".estimation")).to_contain_text("La carte vaut le coup : sur un an, à 40 allers-retours croisés")
+    zone.get_by_label("Allers-retours par an (estimation)").fill("1")
+    expect(zone.locator(".estimation")).to_contain_text("La carte ne vaut pas le coup à ce prix et à ce rythme")
+    zone.get_by_label("Allers-retours par an (estimation)").fill("99")
+    expect(zone.get_by_label("Allers-retours par an (estimation)")).to_have_attribute("aria-invalid", "true")
     zone.get_by_text("Voir comment croiser les billets").click()
     expect(zone.locator("ul.billets li")).to_have_count(2)
     expect(zone.locator("ul.billets")).to_contain_text("Aller-retour croisé depuis Marseille : aller Marseille → Paris lun. 9 nov. à 06:03 (TGV INOUI 6136) ; retour Paris → Marseille mer. 18 nov. à 17:38 (TGV INOUI 6123).")
@@ -803,6 +807,11 @@ def avantage_plan(browser: Browser) -> None:
     panier = page.get_by_role("region", name="Réserver mes trains")
     expect(panier).to_contain_text("Aller-retour croisé depuis Marseille : aller mer. 4 nov., retour mer. 18 nov. — une seule recherche, carte Avantage")
     expect(zone.get_by_label("Prix habituel", exact=False)).to_have_count(0)
+    # Mettre un trajet du billet croisé au panier engage le billet : le plan ne le réapparie plus.
+    panier.get_by_label("Marseille → Paris mer. 4 nov.", exact=False).check()
+    expect(zone.locator("ul.billets")).to_contain_text("Aller-retour croisé depuis Marseille (engagé)")
+    p = attendre_enregistrement(page, lambda p: p["deplacements"][0]["aller"].get("billet") and p["deplacements"][0]["aller"].get("billet") == p["deplacements"][1]["retour"].get("billet"))
+    assert p["deplacements"][1]["retour"]["statut"] == "a-reserver", p
     shot(page, "avantage-plan")
     assert not errors, errors
 
