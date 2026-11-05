@@ -14,11 +14,16 @@ export interface ElementPanier {
 }
 
 export interface Lot {
-  /** deplacement : trajets d'un même déplacement ; carte : aller-retour du plan Avantage (croisé ou non). */
-  type: 'deplacement' | 'carte';
+  /**
+   * deplacement : trajets d'un même déplacement ; carte : aller-retour du plan Avantage (croisé ou non) ;
+   * attente : trajet du plan dont l'autre moitié n'est pas encore en vente (ne pas le réserver seul).
+   */
+  type: 'deplacement' | 'carte' | 'attente';
   croise: boolean;
   origine?: 'Marseille' | 'Paris';
   elements: { deplacement: Deplacement; cote: 'aller' | 'retour' }[];
+  /** Pour « attente » : l'autre trajet et la date d'ouverture de ses ventes. */
+  attente?: { date: string; ouvertureLe: string };
 }
 
 export interface GroupePanier {
@@ -58,11 +63,20 @@ export function listePanier(liste: Deplacement[], aujourdhui: string, maintenant
     if (b.type !== 'ar') continue;
     const ka = cle(b.aller.id, b.aller.cote);
     const kr = cle(b.retour.id, b.retour.cote);
-    const site = candidats.get(ka);
-    if (!site || candidats.get(kr)?.nom !== site.nom) continue;
     const da = parId.get(b.aller.id);
     const dr = parId.get(b.retour.id);
     if (!da || !dr) continue;
+    // Une moitié en vente, l'autre pas encore : attendre l'ouverture pour réserver l'aller-retour d'un coup.
+    for (const [ici, la, d] of [[b.aller, b.retour, da], [b.retour, b.aller, dr]] as const) {
+      const k = cle(ici.id, ici.cote);
+      const site = candidats.get(k);
+      if (site && !candidats.has(cle(la.id, la.cote)) && la.ouvertureLe && !places.has(k)) {
+        groupe(site).lots.push({ type: 'attente', croise: b.croise, origine: b.origine, elements: [{ deplacement: d, cote: ici.cote }], attente: { date: la.date, ouvertureLe: la.ouvertureLe } });
+        places.add(k);
+      }
+    }
+    const site = candidats.get(ka);
+    if (!site || candidats.get(kr)?.nom !== site.nom || places.has(ka) || places.has(kr)) continue;
     groupe(site).lots.push({ type: 'carte', croise: b.croise, origine: b.origine, elements: [{ deplacement: da, cote: b.aller.cote }, { deplacement: dr, cote: b.retour.cote }] });
     places.add(ka).add(kr);
   }
