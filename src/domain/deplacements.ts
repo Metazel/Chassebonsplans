@@ -120,7 +120,8 @@ export function lireDeplacements(v: unknown): { deplacements: Deplacement[]; eca
 /** EXG-03 : déplacements dont le retour date de plus de `mois` mois. */
 export function purger(liste: Deplacement[], aujourdhui: string, mois = 24): Deplacement[] {
   const limite = ajouterMois(aujourdhui, -mois);
-  return liste.filter((d) => d.retour.date >= limite);
+  const gardes = liste.filter((d) => d.retour.date >= limite);
+  return gardes.length === liste.length ? liste : gardes;
 }
 
 export const trier = (liste: Deplacement[]) => [...liste].sort((a, b) => a.aller.date.localeCompare(b.aller.date) || a.id.localeCompare(b.id));
@@ -168,8 +169,35 @@ export function changerStatuts(
       delete t.panierLe;
       if (statut === 'panier' && extra.le) t.panierLe = extra.le;
       if (statut === 'option' && extra.limiteOption) t.limiteOption = extra.limiteOption < t.date ? extra.limiteOption : t.date;
+      if (statut === 'paye') payer(t);
       r = { ...r, [c.cote]: t };
     }
     return r;
   });
+}
+
+/** Passage à « payé » : le prix vu du train devient le prix payé s'il n'y en a pas, puis les prix vus sont oubliés. */
+export function payer(t: Trajet): void {
+  const vu = t.train ? t.prixVus?.find((p) => p.train === `${t.train!.numero}|${t.train!.depart}`) : undefined;
+  if (t.prixCentimes === undefined && vu) t.prixCentimes = vu.centimes;
+  delete t.prixVus;
+}
+
+/** Minimisation : les prix vus d'un trajet passé ou payé ne servent plus, ils sont effacés. */
+export function nettoyerPrixVus(liste: Deplacement[], aujourdhui: string): Deplacement[] {
+  let change = false;
+  const res = liste.map((d) => {
+    let r = d;
+    for (const cote of ['aller', 'retour'] as const) {
+      const t = r[cote];
+      if (t.prixVus && (t.date < aujourdhui || t.statut === 'paye')) {
+        const copie = { ...t };
+        delete copie.prixVus;
+        r = { ...r, [cote]: copie };
+        change = true;
+      }
+    }
+    return r;
+  });
+  return change ? res : liste;
 }

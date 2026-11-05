@@ -276,7 +276,7 @@ export function planifier(r: ReglesAvantage, liste: Deplacement[], aujourdhui: s
 }
 
 /** Trajets couverts par la carte dans le plan (avec leur durée, pour le plafond). */
-const jambesCouvertes = (plan: PlanAvantage) =>
+export const jambesCouvertes = (plan: PlanAvantage) =>
   plan.billets.flatMap((b) => (b.type === 'ar' ? [b.aller, b.retour].filter(aReserver) : b.type === 'simple' ? [b.jambe] : []));
 
 export interface Estimation {
