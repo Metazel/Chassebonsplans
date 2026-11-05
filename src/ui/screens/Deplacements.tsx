@@ -44,6 +44,8 @@ import { estAReverifier } from '../../domain/referentiel';
 import { listePanier } from '../../domain/panier';
 import { Panier } from '../components/Panier';
 import { Avantage } from '../components/Avantage';
+import { PrixVus } from '../components/PrixVus';
+import { prixVuDe } from '../../domain/prix';
 import { figerBillets, planifier } from '../../domain/croises';
 import { REGLES_AVANTAGE } from '../../data/avantage';
 import { OUVERTURES } from '../../data/ouvertures';
@@ -84,7 +86,7 @@ function telechargerTexte(contenu: string, nom: string, type: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function LigneTrain({ t, cote, p }: { t: TrainHoraire; cote: Cote; p: ParametresCout }) {
+function LigneTrain({ t, cote, p, prix }: { t: TrainHoraire; cote: Cote; p: ParametresCout; prix?: number | undefined }) {
   const repas = cote === 'retour' && repasABord(t, p);
   return (
     <>
@@ -99,6 +101,13 @@ function LigneTrain({ t, cote, p }: { t: TrainHoraire; cote: Cote; p: Parametres
           {repas
             ? ` · chez vous vers ${formaterHeure(arriveeDomicile(t, p))} : dîner à bord (${formaterMontant(p.coutRepasCentimes)})`
             : ` · chez vous vers ${formaterHeure(arriveeDomicile(t, p))}`}
+        </span>
+      )}
+      {prix !== undefined && (
+        <span class="prix-train">
+          {' '}
+          · {formaterMontant(prix)}
+          {repas && `, coût complet ${formaterMontant(prix + p.coutRepasCentimes)}`}
         </span>
       )}
     </>
@@ -257,11 +266,15 @@ function BlocTrajet(props: {
   };
 
   const changerStatut = (statut: Statut) => {
-    const t: Trajet = { date: trajet.date, statut };
-    if (trajet.train) t.train = trajet.train;
-    if (statut === 'option' && trajet.limiteOption) t.limiteOption = trajet.limiteOption;
-    if (trajet.prixCentimes !== undefined) t.prixCentimes = trajet.prixCentimes;
-    if (trajet.prixCibleCentimes !== undefined) t.prixCibleCentimes = trajet.prixCibleCentimes;
+    const t: Trajet = { ...trajet, statut };
+    if (statut !== 'option') delete t.limiteOption;
+    if (statut !== 'panier') delete t.panierLe;
+    // Payé sans prix saisi : on reprend le prix vu sur le site pour ce train.
+    const vu = choisi ? prixVuDe(trajet.prixVus, choisi) : undefined;
+    if (statut === 'paye' && t.prixCentimes === undefined && vu) {
+      t.prixCentimes = vu.centimes;
+      setPrix(prixTexte(vu.centimes));
+    }
     props.onTrajet(t);
   };
 
@@ -299,12 +312,15 @@ function BlocTrajet(props: {
               <div class="option-train" key={cle}>
                 <input type="radio" id={id} name={base} checked={cle === cleChoisi} onChange={() => props.onTrajet({ ...trajet, train: choisir(t) })} />
                 <label for={id}>
-                  <LigneTrain t={t} cote={cote} p={p} />
+                  <LigneTrain t={t} cote={cote} p={p} prix={prixVuDe(trajet.prixVus, t)?.centimes} />
                 </label>
               </div>
             );
           })}
         </fieldset>
+      )}
+      {publie && affiches.length > 0 && (trajet.statut === 'a-reserver' || trajet.statut === 'panier') && trajet.date >= props.aujourdhui && !pasEnVente && (
+        <PrixVus base={base} cote={cote} trains={affiches} trajet={trajet} p={p} aujourdhui={props.aujourdhui} onTrajet={props.onTrajet} />
       )}
       {choisi && publie && !trainChoisi && (
         <p class="alerte">

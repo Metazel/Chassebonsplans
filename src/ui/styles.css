@@ -192,3 +192,11 @@ ul.billets li { margin: 0.4rem 0; overflow-wrap: anywhere; }
 ul.billets li.hors-carte { color: var(--texte-2); }
 p.estimation { font-size: 1.05rem; }
 details > summary { padding: 0.65rem 0; cursor: pointer; }
+
+/* Itération 6 : prix réels */
+.prix-train { font-weight: 600; }
+.recommandation { border-left: 4px solid var(--accent); background: var(--retenu); padding: 0.25rem 0.75rem; margin: 0.5rem 0; border-radius: 4px; }
+.recommandation button { margin-top: 0; margin-bottom: 0.5rem; }
+.grille-prix { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.25rem 0.75rem; }
+textarea { font: inherit; width: 100%; min-height: 44px; padding: 0.5rem 0.625rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--surface); color: var(--texte); box-sizing: border-box; }
+.lecture { border: 1px dashed var(--bord); border-radius: 8px; padding: 0.25rem 0.75rem; margin: 0.5rem 0; }
