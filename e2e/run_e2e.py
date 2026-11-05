@@ -822,33 +822,47 @@ def avantage_plan(browser: Browser) -> None:
     assert not errors, errors
 
 
+def saisir_prix(zone, libelle: str, valeur: str) -> None:
+    """Saisit un prix vu ; il est enregistré à la validation du champ (sortie du champ)."""
+    champ = zone.get_by_label(libelle)
+    champ.fill(valeur)
+    champ.blur()
+
+
 @scenario("Itération 6 — prix vus : saisie, collage de la page de résultats, recommandation au coût complet")
 def prix_reels(browser: Browser) -> None:
     page, errors, external = new_page(browser, vue="deplacements")
     ajouter_deplacement(page, "2026-11-04", "2026-11-06")
     retour = bloc(page, "Retour")
     retour.get_by_text("Saisir les prix vus sur le site").click()
-    retour.get_by_label("17:38 · TGV INOUI 6123 (€)").fill("40")
-    retour.get_by_label("18:38 · TGV INOUI 6127 (€)").fill("30")
+    saisir_prix(retour, "Prix vu — 17:38 TGV INOUI 6123 (€)", "40")
+    saisir_prix(retour, "Prix vu — 18:38 TGV INOUI 6127 (€)", "30")
     reco = retour.locator(".recommandation")
     # Cas « le sandwich » : 6127 à 30 € + 10 € de dîner à bord = 40 €, à égalité avec le 6123 qui ramène plus tôt.
     expect(reco).to_contain_text("TGV INOUI 6123 à 17:38, 40,00 €")
     expect(reco).to_contain_text("À 2,00 € près du 6127, il vous ramène plus tôt.")
     expect(reco).to_contain_text("C’est votre train choisi.")
     expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_have_accessible_name(re.compile(r"30,00\s€, coût complet 40,00\s€"))
-    retour.get_by_label("17:38 · TGV INOUI 6123 (€)").fill("45")
+    saisir_prix(retour, "Prix vu — 17:38 TGV INOUI 6123 (€)", "45")
     expect(reco).to_contain_text("TGV INOUI 6127 à 18:38, 40,00 € dont 10,00 € de dîner à bord. C’est le moins cher.")
     reco.get_by_role("button", name="Choisir le 6127").click()
     expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_be_checked()
+    expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_be_focused()  # focus non perdu
     aller = bloc(page, "Aller")
     aller.get_by_text("Saisir les prix vus sur le site").click()
+    # Un prix à 0 est refusé, avec une erreur liée au champ.
+    saisir_prix(aller, "Prix vu — 06:03 TGV INOUI 6136 (€)", "0")
+    expect(aller.get_by_label("Prix vu — 06:03 TGV INOUI 6136 (€)")).to_have_attribute("aria-invalid", "true")
+    saisir_prix(aller, "Prix vu — 06:03 TGV INOUI 6136 (€)", "")
     aller.get_by_label("Ou collez la page de résultats").fill("06:03\nMarseille Saint-Charles\n3h19\n09:22\nTGV INOUI\nà partir de\n45,00 €\n06:19\n3h20\n09:39\nOUIGO\n29 €\n")
     aller.get_by_role("button", name="Lire les prix").click()
     lecture = aller.locator(".lecture")
+    expect(lecture).to_be_focused()
     expect(lecture).to_contain_text("2 prix trouvés : vérifiez avant d’appliquer.")
     expect(lecture).to_contain_text("06:19 · OUIGO 7804 : 29,00 €")
     lecture.get_by_role("button", name="Appliquer ces prix").click()
-    expect(aller.get_by_label("06:19 · OUIGO 7804 (€)")).to_have_value("29,00")
+    expect(aller.get_by_label("Prix vu — 06:19 OUIGO 7804 (€)")).to_have_value("29,00")
+    expect(aller.get_by_label("Ou collez la page de résultats")).to_be_focused()
     aller.locator(".recommandation").get_by_role("button", name="Choisir le 7804").click()
     aller.get_by_label("Réservation", exact=False).select_option("paye")
     expect(aller.get_by_label("Prix payé (€, facultatif)")).to_have_value("29,00")
