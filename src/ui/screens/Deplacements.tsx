@@ -26,6 +26,7 @@ import {
   STATUTS,
   changerStatuts,
   choisir,
+  payer,
   lirePrix,
   nouveauDeplacement,
   nouvelId,
@@ -269,11 +270,10 @@ function BlocTrajet(props: {
     const t: Trajet = { ...trajet, statut };
     if (statut !== 'option') delete t.limiteOption;
     if (statut !== 'panier') delete t.panierLe;
-    // Payé sans prix saisi : on reprend le prix vu sur le site pour ce train.
-    const vu = choisi ? prixVuDe(trajet.prixVus, choisi) : undefined;
-    if (statut === 'paye' && t.prixCentimes === undefined && vu) {
-      t.prixCentimes = vu.centimes;
-      setPrix(prixTexte(vu.centimes));
+    // Payé : le prix vu du train devient le prix payé s'il n'y en a pas, puis les prix vus sont oubliés.
+    if (statut === 'paye') {
+      payer(t);
+      if (t.prixCentimes !== undefined) setPrix(prixTexte(t.prixCentimes));
     }
     props.onTrajet(t);
   };
@@ -319,7 +319,7 @@ function BlocTrajet(props: {
           })}
         </fieldset>
       )}
-      {publie && affiches.length > 0 && (trajet.statut === 'a-reserver' || trajet.statut === 'panier') && trajet.date >= props.aujourdhui && !pasEnVente && (
+      {publie && affiches.length > 0 && trajet.statut === 'a-reserver' && trajet.date >= props.aujourdhui && !pasEnVente && (
         <PrixVus base={base} cote={cote} trains={affiches} trajet={trajet} p={p} aujourdhui={props.aujourdhui} onTrajet={props.onTrajet} />
       )}
       {choisi && publie && !trainChoisi && (

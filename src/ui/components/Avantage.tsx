@@ -7,7 +7,7 @@ import { dateCourte, dateLongue } from '../../domain/dates';
 import { formaterHeure } from '../../domain/heure';
 import { formaterMontant } from '../../domain/argent';
 import { lirePrix } from '../../domain/deplacements';
-import { dureeType, estimer, plafond, projectionAnnuelle, type Billet, type Jambe, type PlanAvantage } from '../../domain/croises';
+import { dureeType, estimer, jambesCouvertes, plafond, projectionAnnuelle, type Billet, type Jambe, type PlanAvantage } from '../../domain/croises';
 import { estAReverifier } from '../../domain/referentiel';
 import { REGLES_AVANTAGE as R } from '../../data/avantage';
 import { ExternalLink } from './ExternalLink';
@@ -68,7 +68,8 @@ export function Avantage(props: {
   const duree = dureeType(plan);
   const estimation = prixOk ? estimer(R, plan, lu || undefined) : null;
   // Prix de référence pour l'année : le prix habituel saisi, sinon la moyenne des prix vus sur le site.
-  const vus = plan.billets.flatMap((b) => (b.type === 'ar' ? [b.aller, b.retour] : [b.jambe])).flatMap((j) => (j.prixVuCentimes !== undefined ? [j.prixVuCentimes] : []));
+  // Seuls les trajets couverts par la carte (pas OUIGO ni les billets hors carte) servent de référence.
+  const vus = jambesCouvertes(plan).flatMap((j) => (j.prixVuCentimes !== undefined ? [j.prixVuCentimes] : []));
   const reference = lu || (vus.length ? Math.round(vus.reduce((a, b) => a + b, 0) / vus.length) : undefined);
   const arParAn = /^\d{1,3}$/.test(ar.trim()) ? Number(ar) : null;
   const projection = reference && prixOk && arParAn !== null && arParAn <= 60 ? projectionAnnuelle(R, reference, arParAn, duree) : null;

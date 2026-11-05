@@ -7,7 +7,7 @@ import { Comparateur, REGLAGES_DEFAUT, nouvelleLigne } from './screens/Comparate
 import { Leviers } from './screens/Leviers';
 import { Donnees } from './screens/Donnees';
 import { Deplacements, type EtatHoraires } from './screens/Deplacements';
-import { purger, type Deplacement } from '../domain/deplacements';
+import { nettoyerPrixVus, purger, type Deplacement } from '../domain/deplacements';
 import { lireReglages } from '../domain/saisie';
 import { REFERENTIEL_COUT } from '../data/parametres';
 import { chargerHoraires } from '../state/horaires';
@@ -31,8 +31,8 @@ async function charger(s: Stockage, aujourdhui: string): Promise<{ profil: Profi
   // EXG-03 : les déplacements terminés depuis plus de 24 mois sont effacés à l'ouverture.
   const liste = lu.profil.deplacements;
   if (liste) {
-    const gardes = purger(liste, aujourdhui);
-    if (gardes.length !== liste.length) {
+    const gardes = nettoyerPrixVus(purger(liste, aujourdhui), aujourdhui);
+    if (gardes !== liste) {
       const profil: Profil = { ...lu.profil };
       if (gardes.length) profil.deplacements = gardes;
       else delete profil.deplacements;
@@ -267,7 +267,7 @@ export function App() {
               setReglagesEtat(p.reglages ?? REGLAGES_DEFAUT);
               // EXG-03 : une sauvegarde ancienne ne réintroduit pas de déplacements de plus de 24 mois.
               const restaure: Profil = { ...p, derniereSauvegarde: aujourdhui };
-              const gardes = purger(p.deplacements ?? [], aujourdhui);
+              const gardes = nettoyerPrixVus(purger(p.deplacements ?? [], aujourdhui), aujourdhui);
               if (gardes.length) restaure.deplacements = gardes;
               else delete restaure.deplacements;
               return enregistrer(restaure);
