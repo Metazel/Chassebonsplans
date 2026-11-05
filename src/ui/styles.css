@@ -191,3 +191,4 @@ ul.billets { padding-left: 1.25rem; }
 ul.billets li { margin: 0.4rem 0; overflow-wrap: anywhere; }
 ul.billets li.hors-carte { color: var(--texte-2); }
 p.estimation { font-size: 1.05rem; }
+details > summary { padding: 0.65rem 0; cursor: pointer; }

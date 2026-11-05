@@ -50,6 +50,17 @@ export function Panier(props: {
               const premier = lot.elements[0]!;
               const second = lot.elements[1];
               const date = (e: typeof premier) => dateCourte(e.deplacement[e.cote].date);
+              if (lot.type === 'attente') {
+                return (
+                  <li key={`attente-${premier.deplacement.id}-${premier.cote}`}>
+                    <p class="ar">
+                      {LIBELLE[premier.cote]} du {date(premier)} : à réserver avec le trajet du {dateCourte(lot.attente!.date)} (aller-retour {lot.croise ? 'croisé ' : ''}carte
+                      Avantage), qui ouvre à la vente le {dateLongue(lot.attente!.ouvertureLe)}.
+                    </p>
+                    <p class="aide">Attendez cette date pour le réserver en une seule recherche : seul, il ne profiterait pas de la carte.</p>
+                  </li>
+                );
+              }
               const titre =
                 lot.type === 'carte'
                   ? `Aller-retour ${lot.croise ? 'croisé ' : ''}depuis ${lot.origine} : aller ${date(premier)}, retour ${second ? date(second) : ''} — une seule recherche, carte Avantage`
