@@ -237,6 +237,9 @@ def accessibilite(browser: Browser) -> None:
         assert not violations, f"{scheme} deplacements: {violations}"
         ajouter_deplacement(page, "2026-11-09", "2026-11-11")  # trains en vente : liste « Réserver mes trains »
         page.get_by_role("region", name="Réserver mes trains").get_by_role("checkbox").first.check()  # panier à finaliser
+        ajouter_deplacement(page, "2026-11-16", "2026-11-18")  # croisement possible avec la semaine du 9
+        page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")  # estimation Avantage
+        page.get_by_text("Voir comment croiser les billets").click()
         violations = axe(page)
         shot(page, f"axe-{scheme}-panier")
         assert not violations, f"{scheme} panier: {violations}"
@@ -700,12 +703,12 @@ def liste_panier(browser: Browser) -> None:
     expect(zone).to_contain_text("Aller-retour du mer. 4 nov. au ven. 6 nov. : une seule recherche")
     expect(zone.get_by_role("checkbox")).to_have_count(4)
     expect(zone).not_to_contain_text("13 janv.")
-    zone.get_by_label("Aller mer. 4 nov. · 06:03 → 09:22 · TGV INOUI n° 6136", exact=False).check()
-    zone.get_by_label("Retour ven. 6 nov.", exact=False).check()
-    zone.get_by_label("Retour mer. 11 nov.", exact=False).check()
+    zone.get_by_label("Marseille → Paris mer. 4 nov. · 06:03 → 09:22 · TGV INOUI n° 6136", exact=False).check()
+    zone.get_by_label("Paris → Marseille ven. 6 nov.", exact=False).check()
+    zone.get_by_label("Paris → Marseille mer. 11 nov.", exact=False).check()
     finaliser = page.get_by_role("group", name="Panier à finaliser : 3 trains")
     expect(finaliser).to_be_visible()
-    zone.get_by_label("Retour mer. 11 nov.", exact=False).uncheck()  # décocher = retirer du panier
+    zone.get_by_label("Paris → Marseille mer. 11 nov.", exact=False).uncheck()  # décocher = retirer du panier
     expect(page.get_by_role("group", name="Panier à finaliser : 2 trains")).to_be_visible()
     attendre_enregistrement(page, lambda p: sum(1 for d in p.get("deplacements", []) for c in ("aller", "retour") if d[c]["statut"] == "panier") == 2)
     page.reload()  # un panier interrompu n'est jamais perdu de vue
@@ -762,6 +765,48 @@ def alerte_petit_prix(browser: Browser) -> None:
     assert not errors, errors
 
 
+@scenario("Itération 5 — carte Avantage non détenue : trajets éligibles grâce aux billets croisés, économie estimée")
+def avantage_interet(browser: Browser) -> None:
+    page, errors, external = new_page(browser, vue="deplacements")
+    ajouter_deplacement(page, "2026-11-09", "2026-11-11")
+    zone = page.get_by_role("region", name="Carte Avantage : intéressante pour vous ?")
+    expect(zone).to_contain_text("Aucun de vos 2 trajets à réserver ne profite de la carte")
+    ajouter_deplacement(page, "2026-11-16", "2026-11-18")
+    expect(zone).to_contain_text("4 de vos 4 trajets à réserver profiteraient de la carte (−30 %, prix plafonné à 89,00 € par trajet), dont 4 grâce aux billets croisés.")
+    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")
+    expect(zone.locator(".estimation")).to_contain_text("Économie estimée : 120,00 € sur ces 4 trajets (30,00 € par trajet)")
+    expect(zone.locator(".estimation")).to_contain_text("remboursée dès 2 trajets éligibles")
+    zone.get_by_text("Voir comment croiser les billets").click()
+    expect(zone.locator("ul.billets li")).to_have_count(2)
+    expect(zone.locator("ul.billets")).to_contain_text("Aller-retour croisé depuis Marseille : aller Marseille → Paris lun. 9 nov. à 06:03 (TGV INOUI 6136) ; retour Paris → Marseille mer. 18 nov. à 17:38 (TGV INOUI 6123).")
+    attendre_enregistrement(page, lambda p: p.get("prixHabituelCentimes") == 10000)
+    page.reload()
+    expect(page.get_by_label("Prix habituel d’un trajet sans carte (€)")).to_have_value("100")
+    shot(page, "avantage-interet")
+    assert not errors, errors
+    assert not external, external
+
+
+@scenario("Itération 5 — carte Avantage déclarée : plan de billets croisés, la liste du panier suit le plan")
+def avantage_plan(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, vue="deplacements")
+    ajouter_deplacement(page, "2026-11-04", "2026-11-06")
+    ajouter_deplacement(page, "2026-11-16", "2026-11-18")
+    page.locator("li.deplacement").first.get_by_role("region", name="Retour").get_by_role("radio", name="7821", exact=False).check()  # OUIGO : hors carte
+    page.goto(URL + "#leviers")
+    page.get_by_label("Carte Avantage Adulte (27-59 ans)").check()
+    attendre_enregistrement(page, lambda p: "carte-avantage-adulte" in p.get("leviers", {}))
+    page.goto(URL + "#deplacements")
+    zone = page.get_by_role("region", name="Votre carte Avantage : billets à prendre")
+    expect(zone).to_contain_text("2 de vos 4 trajets à réserver profitent de la carte")
+    expect(zone.locator("ul.billets")).to_contain_text("Hors carte : Paris → Marseille ven. 6 nov. à 17:52 (OUIGO 7821) — la carte ne s’applique pas à cet opérateur.")
+    panier = page.get_by_role("region", name="Réserver mes trains")
+    expect(panier).to_contain_text("Aller-retour croisé depuis Marseille : aller mer. 4 nov., retour mer. 18 nov. — une seule recherche, carte Avantage")
+    expect(zone.get_by_label("Prix habituel", exact=False)).to_have_count(0)
+    shot(page, "avantage-plan")
+    assert not errors, errors
+
+
 def serve() -> ThreadingHTTPServer:
     class Silencieux(SimpleHTTPRequestHandler):
         def log_message(self, *_args) -> None:  # noqa: D401 - journal muet
@@ -784,7 +829,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:
