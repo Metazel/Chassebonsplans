@@ -28,6 +28,11 @@ updates:
       timezone: "Europe/Paris"
     cooldown:
       default-days: 14
+    # pyee est imposé par Playwright (pyee >=13,<14 pour Playwright 1.6x) : une version majeure de pyee seule
+    # casse l'installation de la recette. Elle suivra la montée de version de Playwright.
+    ignore:
+      - dependency-name: "pyee"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "deps-e2e"
 
