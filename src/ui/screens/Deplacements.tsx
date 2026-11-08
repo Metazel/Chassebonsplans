@@ -12,6 +12,8 @@ import {
   canalVente,
   cleTrain,
   couvre,
+  heureDiner,
+  premierPropose,
   proposer,
   repasABord,
   sourcesAbsentes,
@@ -50,6 +52,7 @@ import { prixVuDe } from '../../domain/prix';
 import { figerBillets, planifier } from '../../domain/croises';
 import { REGLES_AVANTAGE } from '../../data/avantage';
 import { OUVERTURES } from '../../data/ouvertures';
+import { REFERENTIEL_COUT } from '../../data/parametres';
 import { ExternalLink } from '../components/ExternalLink';
 
 export type EtatHoraires = { etat: 'chargement' } | { etat: 'ok'; horaires: Horaires } | { etat: 'erreur' };
@@ -63,11 +66,15 @@ const plage = (c: Cote) => {
   return `${cr.porte === 'arrivee' ? 'arrivée à Paris' : 'départ de Paris'} entre ${formaterHeure(cr.de)} et ${formaterHeure(cr.a)}`;
 };
 
-/** Train présélectionné à la création : le premier du créneau, s'il y en a un. */
+/** Trains proposés : au retour, jamais de départ avant l'heure fixée (17h30), même un jour sans train dans le créneau. */
+const proposerTrajet = (h: Horaires, date: string, cote: Cote) =>
+  cote === 'retour' ? proposer(h, date, 'PM', CRENEAUX.PM, REFERENTIEL_COUT.retourPasAvantMin) : proposer(h, date, 'MP');
+
+/** Train présélectionné à la création : le premier du créneau (au retour, le premier qui arrive à l'heure du dîner). */
 function preselection(h: Horaires | null, date: string, cote: Cote): Trajet {
   const t: Trajet = { date, statut: 'a-reserver' };
   if (h && couvre(h, date)) {
-    const premier = proposer(h, date, sensDu(cote)).dansCreneau[0];
+    const premier = premierPropose(proposerTrajet(h, date, cote), cote === 'retour' ? REFERENTIEL_COUT.arriveeDinerGare : undefined);
     if (premier) t.train = choisir(premier);
   }
   return t;
@@ -89,6 +96,7 @@ function telechargerTexte(contenu: string, nom: string, type: string) {
 
 function LigneTrain({ t, cote, p, prix }: { t: TrainHoraire; cote: Cote; p: ParametresCout; prix?: number | undefined }) {
   const repas = cote === 'retour' && repasABord(t, p);
+  const diner = cote === 'retour' && heureDiner(t, REFERENTIEL_COUT.arriveeDinerGare) === 'diner';
   return (
     <>
       <span class="horaire">
@@ -104,6 +112,7 @@ function LigneTrain({ t, cote, p, prix }: { t: TrainHoraire; cote: Cote; p: Para
             : ` · chez vous vers ${formaterHeure(arriveeDomicile(t, p))}`}
         </span>
       )}
+      {diner && <span class="ideal"> · à l’heure du dîner</span>}
       {prix !== undefined && (
         <span class="prix-train">
           {' '}
@@ -234,7 +243,7 @@ function BlocTrajet(props: {
   }, [trajet.prixCentimes]);
   const h = props.horaires.etat === 'ok' ? props.horaires.horaires : null;
   const publie = h !== null && couvre(h, trajet.date);
-  const { dansCreneau, proches } = publie ? proposer(h, trajet.date, sens) : { dansCreneau: [], proches: [] };
+  const { dansCreneau, proches } = publie ? proposerTrajet(h, trajet.date, cote) : { dansCreneau: [], proches: [] };
   const liste = dansCreneau.length ? dansCreneau : proches;
   const absentes = publie ? sourcesAbsentes(h, trajet.date) : [];
   const choisi = trajet.train;

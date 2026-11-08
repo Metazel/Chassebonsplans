@@ -200,3 +200,5 @@ details > summary { padding: 0.65rem 0; cursor: pointer; }
 .grille-prix { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.25rem 0.75rem; }
 textarea { font: inherit; width: 100%; min-height: 44px; padding: 0.5rem 0.625rem; border: 1px solid var(--bord); border-radius: 8px; background: var(--surface); color: var(--texte); box-sizing: border-box; }
 .lecture { border: 1px dashed var(--bord); border-radius: 8px; padding: 0.25rem 0.75rem; margin: 0.5rem 0; }
+
+.ideal { color: var(--succes); font-weight: 600; }
