@@ -1,16 +1,17 @@
 {
-  "version": "2026-11-08",
+  "version": "2026-11-09",
   "trajetGareDomicileMin": 15,
   "limiteDinerDomicile": "21:45",
   "coutRepasEuros": 10,
   "toleranceEuros": 2,
   "meta": {
-    "source": "Choix de l'utilisateur : dîner à la maison jusqu'à 21h45 (arrivée en gare 21h30 + 15 min de trajet), sinon un repas à bord d'environ 10 € ; retours à privilégier : arrivée à Marseille entre 20h15 et 21h30 (heure du dîner), donc départ vers 17h30, jamais avant (décision du 08/11/2026).",
-    "verifieLe": "2026-11-08"
+    "source": "Choix de l'utilisateur : dîner à la maison jusqu'à 21h45 (arrivée en gare 21h30 + 15 min de trajet), sinon un repas à bord d'environ 10 € ; retours à privilégier : arrivée à Marseille entre 20h15 et 21h30 (heure du dîner), donc départ vers 17h30, jamais avant (décision du 08/11/2026) ; un retour à l'heure du dîner est retenu s'il ne coûte pas plus de 30 € de plus (coût complet, dîner à bord compris) que le moins cher (décision du 09/11/2026).",
+    "verifieLe": "2026-11-09"
   },
   "arriveeDinerGare": {
     "de": "20:15",
     "a": "21:30"
   },
-  "retourPasAvant": "17:30"
+  "retourPasAvant": "17:30",
+  "supplementDinerMaxEuros": 30
 }

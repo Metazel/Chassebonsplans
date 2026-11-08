@@ -10,6 +10,8 @@ export interface ReferentielCout {
   arriveeDinerGare: { de: number; a: number };
   /** Retour : aucun départ proposé avant cette heure (minutes). */
   retourPasAvantMin: number;
+  /** Retour : supplément de coût complet accepté pour arriver à l'heure du dîner, en centimes. */
+  supplementDinerMaxCentimes: number;
   meta: MetaReferentiel;
 }
 
@@ -42,6 +44,7 @@ export function validerReferentiel(src: unknown): ReferentielCout {
   return {
     arriveeDinerGare: { de: dinerDe, a: dinerA },
     retourPasAvantMin: pasAvant,
+    supplementDinerMaxCentimes: Math.round(nombre(r.supplementDinerMaxEuros, 0, 500, 'supplementDinerMaxEuros') * 100),
     parametres: {
       trajetGareDomicileMin: nombre(r.trajetGareDomicileMin, 0, 180, 'trajetGareDomicileMin', true),
       limiteDinerDomicileMin: limite,
