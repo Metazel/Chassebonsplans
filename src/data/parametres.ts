@@ -36,6 +36,9 @@ export function validerReferentiel(src: unknown): ReferentielCout {
   if (dinerDe === null || dinerA === null || dinerA <= dinerDe) throw new Error('Référentiel coût complet invalide : arriveeDinerGare');
   const pasAvant = typeof r.retourPasAvant === 'string' ? lireHeure(r.retourPasAvant) : null;
   if (pasAvant === null) throw new Error('Référentiel coût complet invalide : retourPasAvant');
+  const trajet = nombre(r.trajetGareDomicileMin, 0, 180, 'trajetGareDomicileMin', true);
+  // La fin de la fenêtre du dîner ne peut pas dépasser l'arrivée en gare qui permet encore de dîner à la maison.
+  if (dinerA > limite - trajet) throw new Error('Référentiel coût complet invalide : arriveeDinerGare après la limite du dîner');
   return {
     arriveeDinerGare: { de: dinerDe, a: dinerA },
     retourPasAvantMin: pasAvant,

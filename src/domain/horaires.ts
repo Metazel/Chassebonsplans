@@ -141,11 +141,13 @@ export interface Propositions {
  */
 export function proposer(h: Horaires, date: string, sens: Sens, creneau: Creneau = CRENEAUX[sens], pasAvant?: number): Propositions {
   // Trains du jour même seulement : un train de nuit (arrivée le lendemain) ne répond à aucun créneau de la journée.
-  const jour = trainsDuJour(h, date, sens).filter((t) => t.depart < MINUTES_PAR_JOUR && (creneau.porte === 'depart' || t.arrivee < MINUTES_PAR_JOUR));
+  const jour = trainsDuJour(h, date, sens).filter(
+    (t) => t.depart < MINUTES_PAR_JOUR && (creneau.porte === 'depart' || t.arrivee < MINUTES_PAR_JOUR) && (pasAvant === undefined || t.depart >= pasAvant),
+  );
   const cle = (t: TrainHoraire) => (creneau.porte === 'arrivee' ? t.arrivee : t.depart);
   const dansCreneau = jour.filter((t) => cle(t) >= creneau.de && cle(t) <= creneau.a);
   if (dansCreneau.length) return { dansCreneau, proches: [] };
-  const avant = jour.filter((t) => cle(t) < creneau.de && (pasAvant === undefined || t.depart >= pasAvant)).sort((a, b) => cle(b) - cle(a)).slice(0, 2).reverse();
+  const avant = jour.filter((t) => cle(t) < creneau.de).sort((a, b) => cle(b) - cle(a)).slice(0, 2).reverse();
   const apres = jour.filter((t) => cle(t) > creneau.a).sort((a, b) => cle(a) - cle(b)).slice(0, 2);
   return { dansCreneau: [], proches: [...avant, ...apres] };
 }
@@ -186,6 +188,14 @@ export const villeGare = (g: string) => g.replace(/\s+Hall.*$/i, '').replace(/-/
 /** Texte prêt à coller dans la recherche d'un site de vente (langage naturel + numéro de train). */
 export function texteRecherche(t: Pick<TrainHoraire, 'gareDepart' | 'gareArrivee' | 'depart' | 'numero'>, date: string): string {
   return `${villeGare(t.gareDepart)} → ${villeGare(t.gareArrivee)}, ${dateLongue(date)}, départ ${formaterHeure(t.depart)}, train ${t.numero}`;
+}
+
+/**
+ * Fenêtre d'arrivée en gare « à l'heure du dîner », bornée par les réglages : on n'arrive pas à l'heure du dîner
+ * si l'on doit dîner à bord (fin ≤ limite du dîner à la maison − trajet gare-domicile).
+ */
+export function fenetreDiner(base: { de: number; a: number }, p: { limiteDinerDomicileMin: number; trajetGareDomicileMin: number }) {
+  return { de: base.de, a: Math.min(base.a, p.limiteDinerDomicileMin - p.trajetGareDomicileMin) };
 }
 
 /** Arrivée en gare par rapport à la fenêtre du dîner : avant, dans la fenêtre (à privilégier) ou après. */

@@ -9,7 +9,7 @@ import { formaterMontant, lireMontant } from '../../domain/argent';
 import { dateCourte } from '../../domain/dates';
 import type { ParametresCout } from '../../domain/coutComplet';
 import { REFERENTIEL_COUT } from '../../data/parametres';
-import type { TrainHoraire } from '../../domain/horaires';
+import { fenetreDiner, type TrainHoraire } from '../../domain/horaires';
 import { choisir, type Trajet } from '../../domain/deplacements';
 import { associerCollage, clePrix, lireCollage, majPrixVu, prixAncien, prixVuDe, recommanderParPrix, type Association } from '../../domain/prix';
 
@@ -89,7 +89,7 @@ export function PrixVus(props: {
     }
   });
 
-  const reco = recommanderParPrix(trains, trajet.prixVus, props.p, props.aujourdhui, props.cote === 'retour' ? REFERENTIEL_COUT.arriveeDinerGare : undefined);
+  const reco = recommanderParPrix(trains, trajet.prixVus, props.p, props.aujourdhui, props.cote === 'retour' ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, props.p) : undefined);
   const retenu = reco ? trains.find((t) => clePrix(t) === reco.retenu.id) : undefined;
   const concurrent = reco?.concurrent ? trains.find((t) => clePrix(t) === reco.concurrent!.id) : undefined;
   const dejaChoisi = retenu && trajet.train && clePrix(trajet.train) === clePrix(retenu);

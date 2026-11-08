@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import brut from '../src/data/parametres-cout.json';
 import { REFERENTIEL_COUT, validerReferentiel } from '../src/data/parametres';
 import { recommander } from '../src/domain/coutComplet';
-import { CRENEAUX, heureDiner, premierPropose, proposer, validerHoraires } from '../src/domain/horaires';
+import { CRENEAUX, fenetreDiner, heureDiner, premierPropose, proposer, validerHoraires } from '../src/domain/horaires';
 import { clePrix, recommanderParPrix } from '../src/domain/prix';
 
 const h = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3));
@@ -17,6 +17,11 @@ describe('retours à l’heure du dîner (décision du 08/11/2026)', () => {
     expect(DINER.a).toBe(P.limiteDinerDomicileMin - P.trajetGareDomicileMin);
     expect(() => validerReferentiel({ ...brut, arriveeDinerGare: { de: '21:30', a: '20:15' } })).toThrow();
     expect(() => validerReferentiel({ ...brut, retourPasAvant: 'tôt' })).toThrow();
+    expect(() => validerReferentiel({ ...brut, arriveeDinerGare: { de: '20:15', a: '21:40' } })).toThrow(/limite du dîner/);
+  });
+  it('revue : la fenêtre du dîner suit les réglages (jamais « à l’heure du dîner » et « dîner à bord » à la fois)', () => {
+    expect(fenetreDiner(DINER, { ...P, trajetGareDomicileMin: 30 })).toEqual({ de: h('20:15'), a: h('21:15') });
+    expect(fenetreDiner(DINER, P)).toEqual(DINER);
   });
   it('fenêtre du dîner, bornes comprises', () => {
     expect(heureDiner({ arrivee: h('20:14') }, DINER)).toBe('avant');
@@ -42,6 +47,10 @@ describe('retours à l’heure du dîner (décision du 08/11/2026)', () => {
     const p = proposer(jeu, '2026-11-02', 'PM', CRENEAUX.PM, REFERENTIEL_COUT.retourPasAvantMin);
     expect(premierPropose(p, DINER)?.numero).toBe('3');
     expect(premierPropose(p)?.numero).toBe('2');
+  });
+  it('revue : « pas avant » s’applique aussi au créneau (paramètre plus tardif que le créneau)', () => {
+    const p = proposer(jeu, '2026-11-02', 'PM', CRENEAUX.PM, h('17:35'));
+    expect(p.dansCreneau.map((t) => t.numero)).toEqual(['3']);
   });
   it('jour sans train dans le créneau : jamais de retour avant 17:30, seulement les plus proches après', () => {
     const p = proposer(jeu, '2026-11-03', 'PM', CRENEAUX.PM, REFERENTIEL_COUT.retourPasAvantMin);

@@ -12,6 +12,7 @@ import {
   canalVente,
   cleTrain,
   couvre,
+  fenetreDiner,
   heureDiner,
   premierPropose,
   proposer,
@@ -74,7 +75,7 @@ const proposerTrajet = (h: Horaires, date: string, cote: Cote) =>
 function preselection(h: Horaires | null, date: string, cote: Cote): Trajet {
   const t: Trajet = { date, statut: 'a-reserver' };
   if (h && couvre(h, date)) {
-    const premier = premierPropose(proposerTrajet(h, date, cote), cote === 'retour' ? REFERENTIEL_COUT.arriveeDinerGare : undefined);
+    const premier = premierPropose(proposerTrajet(h, date, cote), cote === 'retour' ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, REFERENTIEL_COUT.parametres) : undefined);
     if (premier) t.train = choisir(premier);
   }
   return t;
@@ -96,7 +97,8 @@ function telechargerTexte(contenu: string, nom: string, type: string) {
 
 function LigneTrain({ t, cote, p, prix }: { t: TrainHoraire; cote: Cote; p: ParametresCout; prix?: number | undefined }) {
   const repas = cote === 'retour' && repasABord(t, p);
-  const diner = cote === 'retour' && heureDiner(t, REFERENTIEL_COUT.arriveeDinerGare) === 'diner';
+  const tropTot = cote === 'retour' && t.depart < REFERENTIEL_COUT.retourPasAvantMin;
+  const diner = cote === 'retour' && !tropTot && heureDiner(t, fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, p)) === 'diner';
   return (
     <>
       <span class="horaire">
@@ -113,6 +115,7 @@ function LigneTrain({ t, cote, p, prix }: { t: TrainHoraire; cote: Cote; p: Para
         </span>
       )}
       {diner && <span class="ideal"> · à l’heure du dîner</span>}
+      {tropTot && <span class="repas a-bord"> · part avant {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}</span>}
       {prix !== undefined && (
         <span class="prix-train">
           {' '}
@@ -305,14 +308,20 @@ function BlocTrajet(props: {
       {publie && absentes.length > 0 && (
         <p class="alerte">Horaires {absentes.join(', ')} pas encore publiés pour cette date : la liste peut être incomplète.</p>
       )}
-      {publie && liste.length === 0 && <p class="alerte">Aucun train direct ce jour-là dans les horaires publiés.</p>}
+      {publie && liste.length === 0 && (
+        <p class="alerte">
+          {cote === 'retour' && duJour.some((t) => t.depart < REFERENTIEL_COUT.retourPasAvantMin)
+            ? `Aucun train direct après ${heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)} ce jour-là dans les horaires publiés.`
+            : 'Aucun train direct ce jour-là dans les horaires publiés.'}
+        </p>
+      )}
       {publie && liste.length > 0 && (
         <fieldset class="choix-train" aria-describedby={`${base}-creneau`}>
           <legend>Train {cote === 'aller' ? 'aller' : 'retour'}</legend>
           <p class="aide" id={`${base}-creneau`}>
             {dansCreneau.length
               ? `Trains avec ${plage(cote)}, ${absentes.length ? 'opérateurs publiés' : 'tous opérateurs'}.`
-              : `Aucun train avec ${plage(cote)} ce jour-là. Voici les plus proches.`}
+              : `Aucun train avec ${plage(cote)} ce jour-là. ${cote === 'retour' ? `Voici les suivants (jamais avant ${heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}).` : 'Voici les plus proches.'}`}
           </p>
           {affiches.map((t) => {
             const cle = cleTrain(t);
@@ -329,7 +338,15 @@ function BlocTrajet(props: {
         </fieldset>
       )}
       {publie && affiches.length > 0 && trajet.statut === 'a-reserver' && trajet.date >= props.aujourdhui && !pasEnVente && (
-        <PrixVus base={base} cote={cote} trains={affiches} trajet={trajet} p={p} aujourdhui={props.aujourdhui} onTrajet={props.onTrajet} />
+        <PrixVus
+          base={base}
+          cote={cote}
+          trains={cote === 'retour' ? affiches.filter((t) => t.depart >= REFERENTIEL_COUT.retourPasAvantMin) : affiches}
+          trajet={trajet}
+          p={p}
+          aujourdhui={props.aujourdhui}
+          onTrajet={props.onTrajet}
+        />
       )}
       {choisi && publie && !trainChoisi && (
         <p class="alerte">
