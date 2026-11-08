@@ -488,6 +488,9 @@ def deplacement_ajout(browser: Browser) -> None:
     expect(retour.get_by_role("radio", name="18:18 → 21:53 Trenitalia (Frecciarossa) 6119", exact=False)).to_be_visible()
     expect(retour.locator(".option-train label", has_text="6119")).to_contain_text("dîner à bord")
     expect(retour.locator(".option-train label", has_text="6153")).not_to_contain_text("dîner à bord")
+    # Retours à l'heure du dîner (arrivée 20h15-21h30) signalés ; présélection : le premier d'entre eux.
+    expect(retour.locator(".option-train label", has_text="6123")).to_contain_text("à l’heure du dîner")
+    expect(retour.locator(".option-train label", has_text="6119")).not_to_contain_text("à l’heure du dîner")
     expect(page.get_by_role("heading", name="Sources des horaires")).to_be_visible()
     retour.get_by_role("radio", name="18:10 → 21:16 TGV INOUI 6153", exact=False).check()
     attendre_enregistrement(page, lambda p: len(p.get("deplacements", [])) == 1 and p["deplacements"][0]["retour"].get("train", {}).get("numero") == "6153")

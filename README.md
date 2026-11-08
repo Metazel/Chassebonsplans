@@ -1,6 +1,6 @@
 # Chasse aux bons plans
 
-Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). À coût égal, le train qui ramène le plus tôt à la maison l'emporte. Version 0.6.0.
+Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). À coût égal, le train qui ramène le plus tôt à la maison l'emporte. Version 0.6.1.
 
 ## Ce que fait l'application
 
