@@ -8,7 +8,8 @@ import { formaterHeure } from '../../domain/heure';
 import { formaterMontant, lireMontant } from '../../domain/argent';
 import { dateCourte } from '../../domain/dates';
 import type { ParametresCout } from '../../domain/coutComplet';
-import type { TrainHoraire } from '../../domain/horaires';
+import { REFERENTIEL_COUT } from '../../data/parametres';
+import { fenetreDiner, type TrainHoraire } from '../../domain/horaires';
 import { choisir, type Trajet } from '../../domain/deplacements';
 import { associerCollage, clePrix, lireCollage, majPrixVu, prixAncien, prixVuDe, recommanderParPrix, type Association } from '../../domain/prix';
 
@@ -88,7 +89,7 @@ export function PrixVus(props: {
     }
   });
 
-  const reco = recommanderParPrix(trains, trajet.prixVus, props.p, props.aujourdhui);
+  const reco = recommanderParPrix(trains, trajet.prixVus, props.p, props.aujourdhui, props.cote === 'retour' ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, props.p) : undefined);
   const retenu = reco ? trains.find((t) => clePrix(t) === reco.retenu.id) : undefined;
   const concurrent = reco?.concurrent ? trains.find((t) => clePrix(t) === reco.concurrent!.id) : undefined;
   const dejaChoisi = retenu && trajet.train && clePrix(trajet.train) === clePrix(retenu);
@@ -144,6 +145,7 @@ export function PrixVus(props: {
             {reco.motif === 'egalite-plus-tot' &&
               concurrent &&
               `À ${formaterMontant(props.p.toleranceCentimes)} près du ${concurrent.numero}, il ${props.cote === 'aller' ? 'arrive' : 'vous ramène'} plus tôt.`}
+            {reco.motif === 'egalite-prefere' && concurrent && `À ${formaterMontant(props.p.toleranceCentimes)} près du ${concurrent.numero}, il vous fait arriver à l’heure du dîner.`}
             {anciens > 0 && ` ${anciens} prix vu${anciens > 1 ? 's' : ''} il y a plus de 2 jours, non comparé${anciens > 1 ? 's' : ''} : mettez-les à jour.`}
           </p>
           {dejaChoisi ? (

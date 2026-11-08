@@ -6,6 +6,10 @@ import type { MetaReferentiel } from '../domain/referentiel';
 
 export interface ReferentielCout {
   parametres: ParametresCout;
+  /** Retour : arrivée en gare à privilégier (heure du dîner), en minutes. */
+  arriveeDinerGare: { de: number; a: number };
+  /** Retour : aucun départ proposé avant cette heure (minutes). */
+  retourPasAvantMin: number;
   meta: MetaReferentiel;
 }
 
@@ -26,7 +30,18 @@ export function validerReferentiel(src: unknown): ReferentielCout {
   if (!meta || typeof meta.source !== 'string' || typeof meta.verifieLe !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(meta.verifieLe)) {
     throw new Error('Référentiel coût complet invalide : meta');
   }
+  const diner = r.arriveeDinerGare as Record<string, unknown> | undefined;
+  const dinerDe = typeof diner?.de === 'string' ? lireHeure(diner.de) : null;
+  const dinerA = typeof diner?.a === 'string' ? lireHeure(diner.a) : null;
+  if (dinerDe === null || dinerA === null || dinerA <= dinerDe) throw new Error('Référentiel coût complet invalide : arriveeDinerGare');
+  const pasAvant = typeof r.retourPasAvant === 'string' ? lireHeure(r.retourPasAvant) : null;
+  if (pasAvant === null) throw new Error('Référentiel coût complet invalide : retourPasAvant');
+  const trajet = nombre(r.trajetGareDomicileMin, 0, 180, 'trajetGareDomicileMin', true);
+  // La fin de la fenêtre du dîner ne peut pas dépasser l'arrivée en gare qui permet encore de dîner à la maison.
+  if (dinerA > limite - trajet) throw new Error('Référentiel coût complet invalide : arriveeDinerGare après la limite du dîner');
   return {
+    arriveeDinerGare: { de: dinerDe, a: dinerA },
+    retourPasAvantMin: pasAvant,
     parametres: {
       trajetGareDomicileMin: nombre(r.trajetGareDomicileMin, 0, 180, 'trajetGareDomicileMin', true),
       limiteDinerDomicileMin: limite,

@@ -1,6 +1,7 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
-import { formaterHeure } from '../../domain/heure';
+import { formaterHeure, heureEnClair } from '../../domain/heure';
+import { fenetreDiner } from '../../domain/horaires';
 import { formaterMontant } from '../../domain/argent';
 import { recommander, type Evaluation, type ParametresCout, type Recommandation } from '../../domain/coutComplet';
 import { estAReverifier } from '../../domain/referentiel';
@@ -29,6 +30,14 @@ function nomTrain(e: Evaluation, lignes: LigneTrain[]): string {
 function Explication({ reco, lignes, parametres }: { reco: Recommandation; lignes: LigneTrain[]; parametres: ParametresCout }) {
   const { retenu, motif, concurrent } = reco;
   if (motif === 'moins-cher') return <>C’est le coût complet le plus bas : {formaterMontant(retenu.coutCompletCentimes)}.</>;
+  if (motif === 'egalite-prefere' && concurrent) {
+    return (
+      <>
+        Il fait jeu égal avec le {nomTrain(concurrent, lignes)} (coût complet à {formaterMontant(parametres.toleranceCentimes)} près) et vous fait arriver à
+        l’heure du dîner.
+      </>
+    );
+  }
   if (motif !== 'egalite-plus-tot' || !concurrent) return null;
   if (concurrent.arriveeDomicile === retenu.arriveeDomicile) {
     return (
@@ -113,7 +122,12 @@ export function Comparateur(props: {
   const lues = lignes.map(lireLigne);
   const { parametres, erreurs: erreursReglages } = lireReglages(reglages);
   const trains = lues.flatMap((l) => (l.train ? [l.train] : []));
-  const reco = parametres ? recommander(trains, parametres) : null;
+  // Retour : à égalité de coût complet, le train qui arrive à l'heure du dîner l'emporte (décision du 08/11/2026).
+  const diner = parametres ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, parametres) : null;
+  // Jamais de retour avant 17h30 : ces trains restent affichés mais ne sont pas recommandés.
+  const tropTot = trains.filter((t) => t.depart < REFERENTIEL_COUT.retourPasAvantMin);
+  const candidats = trains.filter((t) => t.depart >= REFERENTIEL_COUT.retourPasAvantMin);
+  const reco = parametres ? recommander(candidats, parametres, (e) => !!diner && e.arriveeGare >= diner.de && e.arriveeGare <= diner.a) : null;
   const aReverifier = estAReverifier(REFERENTIEL_COUT.meta.verifieLe, new Date());
 
   const maj = (id: string, champ: keyof Omit<LigneTrain, 'id'>, v: string) =>
@@ -130,6 +144,8 @@ export function Comparateur(props: {
 
   let phrase: ComponentChildren;
   if (!parametres) phrase = 'Corrigez les réglages du coût complet pour obtenir une recommandation.';
+  else if (trains.length >= 2 && candidats.length < 2)
+    phrase = `Saisissez au moins deux trains qui partent à ${heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)} ou après pour obtenir une recommandation.`;
   else if (!reco || reco.classement.length < 2) phrase = 'Saisissez au moins deux trains complets pour obtenir une recommandation.';
   else
     phrase = (
@@ -146,7 +162,9 @@ export function Comparateur(props: {
       </h1>
       <p class="intro">
         Le coût complet ajoute au billet ce que les horaires vous font dépenser : un repas à bord si vous arrivez chez vous après{' '}
-        {formaterHeure((parametres ?? defauts).limiteDinerDomicileMin)}. À coût égal, le train qui vous ramène le plus tôt l’emporte.
+        {formaterHeure((parametres ?? defauts).limiteDinerDomicileMin)}. À coût égal, le train qui arrive à l’heure du dîner (
+        {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.de)} à {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.a)} en gare) l’emporte, puis celui qui vous
+        ramène le plus tôt. Les retours partent au plus tôt à {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}.
       </p>
       {props.resumeLeviers}
 
@@ -185,6 +203,12 @@ export function Comparateur(props: {
           {phrase}
         </p>
         <Avertissements lues={lues} />
+        {tropTot.length > 0 && (
+          <p class="alerte">
+            {tropTot.length > 1 ? `${tropTot.length} trains partent` : 'Un train part'} avant {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)} : vous ne prenez pas
+            de retour aussi tôt, il{tropTot.length > 1 ? 's ne sont' : ' n’est'} pas recommandé{tropTot.length > 1 ? 's' : ''}.
+          </p>
+        )}
         {parametres && reco && reco.classement.length >= 2 && (
           <>
             <p>
@@ -209,7 +233,7 @@ export function Comparateur(props: {
               maxLength={LONGUEUR_REGLAGE}
               libelle="Écart toléré (€)"
               inputMode="decimal"
-              aide="Jusqu’à cet écart compris, le train qui ramène le plus tôt l’emporte."
+              aide="Jusqu’à cet écart compris, le train à l’heure du dîner, puis le plus tôt, l’emporte."
               valeur={reglages.tolerance}
               erreur={erreursReglages.tolerance}
               onInput={(v) => setReglages((r) => ({ ...r, tolerance: v }))}
