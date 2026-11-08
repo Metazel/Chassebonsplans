@@ -876,6 +876,26 @@ def prix_reels(browser: Browser) -> None:
     assert not external, external
 
 
+@scenario("Retours à l'heure du dîner : jamais avant 17h30, signalés, préférés à égalité (décision du 08/11)")
+def retour_heure_diner(browser: Browser) -> None:
+    page, errors, _ = new_page(browser, vue="deplacements")
+    # Le 25/11, un 17:07 → 20:16 circule (échantillon) : il n'est jamais proposé au retour.
+    ajouter_deplacement(page, "2026-11-23", "2026-11-25")
+    retour = bloc(page, "Retour")
+    expect(retour.locator(".option-train", has_text="6111")).to_have_count(0)
+    expect(retour.get_by_role("radio", name="17:38 → 20:57", exact=False)).to_be_checked()
+    expect(retour.locator(".option-train label", has_text="6123")).to_contain_text("à l’heure du dîner")
+    retour.get_by_text("Saisir les prix vus sur le site").click()
+    expect(retour.get_by_label("Prix vu — 17:07", exact=False)).to_have_count(0)
+    # Comparateur : un train avant 17h30 est signalé et jamais recommandé.
+    page.goto(URL + "#comparer")
+    saisir_train(page, 1, "17:00", "20:05", "35")
+    saisir_train(page, 2, "17:38", "20:57", "41")
+    expect(page.locator(".reco")).to_contain_text("Saisissez au moins deux trains qui partent à 17 h 30 ou après")
+    expect(page.locator(".resultat")).to_contain_text("Un train part avant 17 h 30")
+    assert not errors, errors
+
+
 def serve() -> ThreadingHTTPServer:
     class Silencieux(SimpleHTTPRequestHandler):
         def log_message(self, *_args) -> None:  # noqa: D401 - journal muet
@@ -898,7 +918,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, prix_reels, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, prix_reels, retour_heure_diner, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:
