@@ -43,7 +43,7 @@ export interface Evaluation {
   coutCompletCentimes: number;
 }
 
-export type Motif = 'seul' | 'moins-cher' | 'egalite-plus-tot';
+export type Motif = 'seul' | 'moins-cher' | 'egalite-plus-tot' | 'egalite-prefere';
 
 export interface Recommandation {
   retenu: Evaluation;
@@ -71,15 +71,24 @@ export function evaluer(train: TrainValide, p: ParametresCout): Evaluation {
   };
 }
 
-export function recommander(trains: readonly TrainValide[], p: ParametresCout): Recommandation | null {
+/**
+ * `prefere` (facultatif) : à égalité de coût complet (tolérance comprise), un train « préféré » l'emporte
+ * avant le critère « le plus tôt » (retour : arrivée à l'heure du dîner).
+ */
+export function recommander(trains: readonly TrainValide[], p: ParametresCout, prefere?: (e: Evaluation) => boolean): Recommandation | null {
   if (trains.length === 0) return null;
   const classement = trains
     .map((t) => evaluer(t, p))
     .sort((a, b) => a.coutCompletCentimes - b.coutCompletCentimes || a.arriveeDomicile - b.arriveeDomicile);
   const moinsCher = classement[0]!;
   const proches = classement.filter((e) => e.coutCompletCentimes - moinsCher.coutCompletCentimes <= p.toleranceCentimes);
-  const retenu = proches.reduce((meilleur, e) => (e.arriveeDomicile < meilleur.arriveeDomicile ? e : meilleur));
+  const preferes = prefere ? proches.filter(prefere) : [];
+  const parmi = preferes.length ? preferes : proches;
+  const retenu = parmi.reduce((meilleur, e) => (e.arriveeDomicile < meilleur.arriveeDomicile ? e : meilleur));
   if (classement.length === 1) return { retenu, classement, motif: 'seul' };
+  // Préféré à égalité alors qu'un autre, aussi cher ou moins, ramène plus tôt.
+  const plusTot = proches.find((e) => e !== retenu && e.arriveeDomicile < retenu.arriveeDomicile);
+  if (preferes.length && plusTot) return { retenu, classement, motif: 'egalite-prefere', concurrent: plusTot };
   // Égalité : un autre train coûte autant ou moins, mais ramène plus tard à la maison.
   const concurrent = classement.find((e) => e !== retenu && e.coutCompletCentimes <= retenu.coutCompletCentimes);
   return concurrent ? { retenu, classement, motif: 'egalite-plus-tot', concurrent } : { retenu, classement, motif: 'moins-cher' };

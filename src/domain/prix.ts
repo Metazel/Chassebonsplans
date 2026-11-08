@@ -57,13 +57,15 @@ export function recommanderParPrix(
   prixVus: PrixVu[] | undefined,
   p: ParametresCout,
   aujourdhui?: string,
+  /** Retour : fenêtre d'arrivée en gare à privilégier à égalité de coût (heure du dîner). */
+  fenetreDiner?: { de: number; a: number },
 ): Recommandation | null {
   const avecPrix = trains.flatMap((t) => {
     const pv = prixVuDe(prixVus, t);
     // Un prix vu il y a plus de 2 jours n'entre pas dans la comparaison : il a pu changer.
     return pv && !(aujourdhui && prixAncien(pv, aujourdhui)) ? [{ id: clePrix(t), depart: t.depart % 1440, arrivee: t.arrivee % 1440, prixCentimes: pv.centimes }] : [];
   });
-  return recommander(avecPrix, p);
+  return recommander(avecPrix, p, fenetreDiner ? (e) => e.arriveeGare >= fenetreDiner.de && e.arriveeGare <= fenetreDiner.a : undefined);
 }
 
 export interface LigneCollee {
