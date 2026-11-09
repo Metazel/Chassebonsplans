@@ -1,0 +1,55 @@
+{
+  "version": "2026-11-09",
+  "liberte": {
+    "levier": "carte-liberte",
+    "nom": "Carte Liberté",
+    "prixCarteCentimes": 34900,
+    "prixFixeCentimes": 7300,
+    "meta": {
+      "source": "https://www.sncf-connect.com/catalogue/description/carte-liberte",
+      "verifieLe": "2026-11-09",
+      "notes": "349 € par an (299 € avec un Contrat Pro). Tarif Liberté pour le titulaire, tous les jours, sur TGV INOUI et Intercités à réservation obligatoire (hors OUIGO) : prix fixe de 73 € en 2de pour Paris - Marseille, même en dernière minute, échangeable et remboursable sans frais jusqu'à 30 minutes après le départ."
+    }
+  },
+  "maxActif": {
+    "levier": "max-actif",
+    "nom": "MAX ACTIF",
+    "mensualiteCentimes": 44100,
+    "reservationsParAn": 250,
+    "joursEligibles": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "engagementMois": 12,
+    "meta": {
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
+      "verifieLe": "2026-11-09",
+      "notes": "250 réservations à 0 € par an, du lundi au jeudi, 2 trajets par jour au plus, sur TGV et TGV INOUI (hors OUIGO), dans la limite des places attribuées. Engagement 12 mois (une mensualité de plus en cas de résiliation anticipée). Marseille - Paris éligible (SNCF Connect, page Marseille - Paris). Mensualité en 2de non publiée par la SNCF (devis sur le site MAX ACTIF) : 441 € selon Milesopedia (https://milesopedia.fr/transports/max-actif-sncf-prix/, mis à jour le 14/08/2026), après la réévaluation du 1er avril 2026 ; à confirmer par devis.",
+      "sourcePrix": "https://milesopedia.fr/transports/max-actif-sncf-prix/"
+    }
+  },
+  "maxActifPlus": {
+    "levier": "max-actif-plus",
+    "nom": "MAX ACTIF+",
+    "mensualiteCentimes": 70200,
+    "reservationsParAn": 450,
+    "joursEligibles": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "engagementMois": 12,
+    "meta": {
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
+      "verifieLe": "2026-11-09",
+      "notes": "450 réservations à 0 € par an, 7 jours sur 7, 2 trajets par jour au plus, sur TGV et TGV INOUI à réservation obligatoire (hors OUIGO, trains de nuit et Transilien). Engagement 12 mois. Mensualité en 2de non publiée par la SNCF : 702 € selon Milesopedia (mis à jour le 14/08/2026) ; à confirmer par devis.",
+      "sourcePrix": "https://milesopedia.fr/transports/max-actif-sncf-prix/"
+    }
+  }
+}
