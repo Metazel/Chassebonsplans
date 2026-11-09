@@ -5,6 +5,8 @@
  * Coût induit du lot 1 : un repas à bord si l'arrivée au domicile dépasse l'heure limite du dîner.
  * Choix : le coût complet le plus bas ; si d'autres trains sont à la tolérance près (écart
  * inférieur ou égal, bornes comprises), celui qui ramène le plus tôt à la maison.
+ * Préférence facultative (retour à l'heure du dîner, décisions des 08 et 09/11/2026) : le train préféré
+ * l'emporte s'il ne coûte pas plus que le supplément accepté de plus que le moins cher.
  */
 import { MINUTES_PAR_JOUR, arriveeApresDepart } from './heure';
 
@@ -50,8 +52,13 @@ export interface Recommandation {
   /** Toutes les évaluations, du coût complet le plus bas au plus haut. */
   classement: Evaluation[];
   motif: Motif;
-  /** En cas d'égalité : le train au coût complet inférieur ou égal, écarté car il arrive plus tard. */
+  /**
+   * Égalité : le train au coût complet inférieur ou égal, écarté car il arrive plus tard (ou plus tôt mais hors de la préférence) ;
+   * motif « prefere » : le moins cher, écarté au profit du train préféré.
+   */
   concurrent?: Evaluation;
+  /** Motif « prefere » : supplément maximal réellement appliqué, en centimes. */
+  supplementMaxCentimes?: number;
 }
 
 export function evaluer(train: TrainValide, p: ParametresCout): Evaluation {
@@ -95,11 +102,16 @@ export function recommander(trains: readonly TrainValide[], p: ParametresCout, p
   const meilleurPrefere = preferes[0];
   const marge = Math.max(preference?.supplementMaxCentimes ?? 0, p.toleranceCentimes);
   if (meilleurPrefere && meilleurPrefere.coutCompletCentimes - moinsCher.coutCompletCentimes <= marge) {
-    const retenu = plusTot(preferes.filter((e) => e.coutCompletCentimes - meilleurPrefere.coutCompletCentimes <= p.toleranceCentimes));
+    // Entre préférés à égalité, le plus tôt, sans jamais dépasser le supplément accepté par rapport au moins cher.
+    const retenu = plusTot(
+      preferes.filter(
+        (e) => e.coutCompletCentimes - meilleurPrefere.coutCompletCentimes <= p.toleranceCentimes && e.coutCompletCentimes - moinsCher.coutCompletCentimes <= marge,
+      ),
+    );
     if (classement.length === 1) return { retenu, classement, motif: 'seul' };
     if (retenu.coutCompletCentimes - moinsCher.coutCompletCentimes > p.toleranceCentimes) {
       // Plus cher que le moins cher au-delà de la tolérance, mais dans le supplément accepté.
-      return { retenu, classement, motif: 'prefere', concurrent: moinsCher };
+      return { retenu, classement, motif: 'prefere', concurrent: moinsCher, supplementMaxCentimes: marge };
     }
     const precoce = proches.find((e) => e !== retenu && e.arriveeDomicile < retenu.arriveeDomicile);
     if (precoce) return { retenu, classement, motif: 'egalite-prefere', concurrent: precoce };

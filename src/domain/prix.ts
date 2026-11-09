@@ -50,7 +50,8 @@ export const prixAncien = (p: PrixVu, aujourdhui: string) => ecartJours(p.le, au
 
 /**
  * Recommandation au coût complet parmi les trains dont le prix est connu (règle du CLAUDE.md :
- * le moins cher, et à égalité à la tolérance près, celui qui arrive le plus tôt).
+ * le moins cher, à égalité celui qui arrive le plus tôt ; au retour, le train à l'heure du dîner
+ * l'emporte jusqu'au supplément accepté).
  */
 export function recommanderParPrix(
   trains: readonly { numero: string; depart: number; arrivee: number }[],

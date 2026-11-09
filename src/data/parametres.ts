@@ -41,10 +41,13 @@ export function validerReferentiel(src: unknown): ReferentielCout {
   const trajet = nombre(r.trajetGareDomicileMin, 0, 180, 'trajetGareDomicileMin', true);
   // La fin de la fenêtre du dîner ne peut pas dépasser l'arrivée en gare qui permet encore de dîner à la maison.
   if (dinerA > limite - trajet) throw new Error('Référentiel coût complet invalide : arriveeDinerGare après la limite du dîner');
+  const supplement = Math.round(nombre(r.supplementDinerMaxEuros, 0, 500, 'supplementDinerMaxEuros') * 100);
+  // Le supplément accepté pour le dîner couvre au moins la tolérance d'égalité (sinon la préférence ne jouerait pas à égalité).
+  if (supplement < Math.round(nombre(r.toleranceEuros, 0, 50, 'toleranceEuros') * 100)) throw new Error('Référentiel coût complet invalide : supplementDinerMaxEuros inférieur à la tolérance');
   return {
     arriveeDinerGare: { de: dinerDe, a: dinerA },
     retourPasAvantMin: pasAvant,
-    supplementDinerMaxCentimes: Math.round(nombre(r.supplementDinerMaxEuros, 0, 500, 'supplementDinerMaxEuros') * 100),
+    supplementDinerMaxCentimes: supplement,
     parametres: {
       trajetGareDomicileMin: nombre(r.trajetGareDomicileMin, 0, 180, 'trajetGareDomicileMin', true),
       limiteDinerDomicileMin: limite,

@@ -34,7 +34,8 @@ function Explication({ reco, lignes, parametres }: { reco: Recommandation; ligne
     return (
       <>
         Il vous fait arriver à l’heure du dîner pour {formaterMontant(retenu.coutCompletCentimes - concurrent.coutCompletCentimes)} de plus que le{' '}
-        {nomTrain(concurrent, lignes)} (coût complet) : dans la limite de {formaterMontant(REFERENTIEL_COUT.supplementDinerMaxCentimes)} que vous acceptez.
+        {nomTrain(concurrent, lignes)} (coût complet, dîner à bord compris) : dans la limite de{' '}
+        {formaterMontant(reco.supplementMaxCentimes ?? REFERENTIEL_COUT.supplementDinerMaxCentimes)} que vous acceptez.
       </>
     );
   }
@@ -130,7 +131,8 @@ export function Comparateur(props: {
   const lues = lignes.map(lireLigne);
   const { parametres, erreurs: erreursReglages } = lireReglages(reglages);
   const trains = lues.flatMap((l) => (l.train ? [l.train] : []));
-  // Retour : à égalité de coût complet, le train qui arrive à l'heure du dîner l'emporte (décision du 08/11/2026).
+  // Retour : le train qui arrive à l'heure du dîner l'emporte jusqu'au supplément accepté (décisions des 08 et 09/11/2026).
+  const supplement = Math.max(REFERENTIEL_COUT.supplementDinerMaxCentimes, (parametres ?? defauts).toleranceCentimes);
   const diner = parametres ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, parametres) : null;
   // Jamais de retour avant 17h30 : ces trains restent affichés mais ne sont pas recommandés.
   const tropTot = trains.filter((t) => t.depart < REFERENTIEL_COUT.retourPasAvantMin);
@@ -177,7 +179,7 @@ export function Comparateur(props: {
         Le coût complet ajoute au billet ce que les horaires vous font dépenser : un repas à bord si vous arrivez chez vous après{' '}
         {formaterHeure((parametres ?? defauts).limiteDinerDomicileMin)}. Le train qui arrive à l’heure du dîner (
         {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.de)} à {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.a)} en gare) l’emporte s’il ne coûte pas plus de{' '}
-        {formaterMontant(REFERENTIEL_COUT.supplementDinerMaxCentimes)} de plus que le moins cher ; à coût égal, celui qui vous ramène le plus tôt. Les retours partent au plus tôt à {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}.
+        {formaterMontant(supplement)} de plus que le moins cher ; à coût égal, celui qui vous ramène le plus tôt. Les retours partent au plus tôt à {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}.
       </p>
       {props.resumeLeviers}
 
@@ -246,7 +248,7 @@ export function Comparateur(props: {
               maxLength={LONGUEUR_REGLAGE}
               libelle="Écart toléré (€)"
               inputMode="decimal"
-              aide="Jusqu’à cet écart compris, le train à l’heure du dîner, puis le plus tôt, l’emporte."
+              aide="Jusqu’à cet écart compris, deux trains sont à égalité : celui qui ramène le plus tôt l’emporte (le retour à l’heure du dîner l’emporte, lui, jusqu’à 30 € de plus)."
               valeur={reglages.tolerance}
               erreur={erreursReglages.tolerance}
               onInput={(v) => setReglages((r) => ({ ...r, tolerance: v }))}
