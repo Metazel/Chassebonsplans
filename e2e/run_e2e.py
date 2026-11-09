@@ -297,8 +297,9 @@ def clavier(browser: Browser) -> None:
     page.keyboard.press("Tab")
     expect(page.get_by_role("link", name="Aller au contenu")).to_be_focused()
     page.keyboard.press("Enter")
+    expect(page.locator("main#contenu")).to_be_focused()
     page.keyboard.press("Tab")
-    assert page.evaluate("document.activeElement.closest('main') !== null"), "le focus n'est pas dans le contenu"
+    expect(page.locator("main#contenu :focus")).to_have_count(1)  # le focus est dans le contenu
     for _ in range(3):
         if page.evaluate("document.activeElement.id").endswith("-dep"):
             break
