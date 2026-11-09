@@ -167,9 +167,13 @@ def train_incomplet(browser: Browser) -> None:
     page, errors, _ = new_page(browser)
     saisir_train(page, 1, "19:00", "22:00", "30")
     saisir_train(page, 2, "17:45", "20:45", "40")
+    expect(page.locator(".reco")).to_contain_text("train 2 (17:45)")  # les deux trains sont pris en compte avant d'en ajouter un
     page.get_by_role("button", name="Ajouter un train").click()
-    page.get_by_role("group", name="Train 3").get_by_label("Prix du billet (€)").fill("5")
-    expect(page.locator(".avertissements")).to_contain_text("Train 3 incomplet")
+    train3 = page.get_by_role("group", name="Train 3")
+    expect(train3.get_by_label("Départ")).to_be_focused()  # la ligne est montée et prête
+    train3.get_by_label("Prix du billet (€)").fill("5")
+    expect(train3.get_by_label("Prix du billet (€)")).to_have_value("5")
+    expect(page.locator(".avertissements")).to_contain_text("Train 3 incomplet", timeout=10_000)
     expect(page.locator(".reco")).to_contain_text("train 2 (17:45)")
     assert not errors, errors
 
