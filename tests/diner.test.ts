@@ -91,31 +91,30 @@ describe('retours à l’heure du dîner (décision du 08/11/2026)', () => {
     // Le cas « sandwich » reste vrai : 30 € + 10 € contre 40 € → le 6123.
     expect(recommanderParPrix([a, b], vus(4000, 3000), P, '2026-11-08', DIN)?.retenu.id).toBe(clePrix(a));
   });
-  it('revue : le départage à 2 € près entre retours à l’heure du dîner ne franchit jamais les 30 €', () => {
-    const pref = { estPrefere: (e: { arriveeGare: number }) => e.arriveeGare >= DINER.de && e.arriveeGare <= DINER.a, supplementMaxCentimes: 3000 };
+  it('revue : le départage à 2 € près entre retours à l’heure du dîner ne franchit jamais le supplément accepté (15 €)', () => {
+    const S = REFERENTIEL_COUT.supplementDinerMaxCentimes;
+    const pref = { estPrefere: (e: { arriveeGare: number }) => e.arriveeGare >= DINER.de && e.arriveeGare <= DINER.a, supplementMaxCentimes: S };
     const trains = [
       { id: 'tard', depart: h('19:38'), arrivee: h('23:06'), prixCentimes: 3000 }, // 30 € + 10 € de dîner à bord = 40 €
-      { id: 'b', depart: h('18:10'), arrivee: h('21:16'), prixCentimes: 7000 }, // 30 € de plus
-      { id: 'a', depart: h('17:38'), arrivee: h('20:57'), prixCentimes: 7200 }, // 32 € de plus, plus tôt
+      { id: 'b', depart: h('18:10'), arrivee: h('21:16'), prixCentimes: 5500 }, // 15 € de plus
+      { id: 'a', depart: h('17:38'), arrivee: h('20:57'), prixCentimes: 5700 }, // 17 € de plus, plus tôt
     ];
     const r = recommander(trains, P, pref);
     expect(r?.retenu.id).toBe('b');
     expect(r?.motif).toBe('prefere');
     expect(r?.concurrent?.id).toBe('tard');
-    expect(r?.supplementMaxCentimes).toBe(3000);
+    expect(r?.supplementMaxCentimes).toBe(S);
   });
-  it('tolérance réglée au-dessus du supplément : les deux trains sont à égalité, le plus tôt l’emporte', () => {
-    const pref = { estPrefere: (e: { arriveeGare: number }) => e.arriveeGare >= DINER.de && e.arriveeGare <= DINER.a, supplementMaxCentimes: 3000 };
-    const r = recommander(
-      [
-        { id: 'tard', depart: h('19:38'), arrivee: h('23:06'), prixCentimes: 3000 },
-        { id: 'diner', depart: h('17:38'), arrivee: h('20:57'), prixCentimes: 7500 },
-      ],
-      { ...P, toleranceCentimes: 4000 },
-      pref,
-    );
+  it('tolérance réglée au-dessus du supplément (20 € contre 15 €) : les deux trains sont à égalité, le plus tôt l’emporte', () => {
+    const pref = { estPrefere: (e: { arriveeGare: number }) => e.arriveeGare >= DINER.de && e.arriveeGare <= DINER.a, supplementMaxCentimes: REFERENTIEL_COUT.supplementDinerMaxCentimes };
+    const trains = [
+      { id: 'tard', depart: h('19:38'), arrivee: h('23:06'), prixCentimes: 3000 },
+      { id: 'diner', depart: h('17:38'), arrivee: h('20:57'), prixCentimes: 6000 }, // 20 € de plus en coût complet
+    ];
+    const r = recommander(trains, { ...P, toleranceCentimes: 2000 }, pref);
     expect(r?.retenu.id).toBe('diner');
     expect(r?.motif).toBe('egalite-plus-tot');
+    expect(recommander([trains[0]!, { ...trains[1]!, prixCentimes: 6001 }], { ...P, toleranceCentimes: 2000 }, pref)?.retenu.id).toBe('tard');
   });
   it('un seul train à l’heure du dîner : motif « seul »', () => {
     const pref = { estPrefere: () => true, supplementMaxCentimes: 3000 };
