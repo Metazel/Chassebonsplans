@@ -1,5 +1,5 @@
 {
-  "version": "2026-10-31",
+  "version": "2026-11-09",
   "leviers": [
     {
       "id": "carte-avantage-adulte",
@@ -23,32 +23,49 @@
       "nom": "Carte Liberté",
       "categorie": "train",
       "prix": "349 € par an (299 € avec un Contrat Pro)",
-      "effet": "Tarif Liberté pour les voyages professionnels : -60 % en 2de et -45 % en 1re, calculés sur le tarif Flex Première ; tarif Avantage (-30 %) pour les voyages personnels.",
+      "effet": "Tarif Liberté tous les jours pour le titulaire, sur TGV INOUI et Intercités à réservation obligatoire : prix fixe même en dernière minute (73 € en 2de sur Paris - Marseille), 100 % flexible ; tarif Avantage (-30 %) pour les voyages personnels.",
       "conditions": [
         "Tarif Liberté : échange et remboursement sans frais jusqu'à 30 minutes après le départ.",
         "Tarif Avantage : échange et remboursement gratuits jusqu'à J-7, puis retenue (19 € par trajet sur TGV INOUI).",
         "Dès 12 ans ; vérifier les tarifs en vigueur avant l'achat."
       ],
       "validiteAnnuelle": true,
-      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/carte-liberte/",
-      "verifieLe": "2026-10-31"
+      "source": "https://www.sncf-connect.com/catalogue/description/carte-liberte",
+      "verifieLe": "2026-11-09"
     },
     {
       "id": "max-actif",
-      "nom": "Abonnement MAX ACTIF / MAX ACTIF+",
+      "nom": "Abonnement MAX ACTIF",
       "categorie": "train",
-      "prix": "Selon le trajet, 12 mensualités",
-      "effet": "Réservations à 0 € sur TGV et TGV INOUI : 250 (du lundi au jeudi) avec MAX ACTIF, 450 (7 jours sur 7) avec MAX ACTIF+ ; 2 trajets par jour au plus, espacés d'au moins 2 heures.",
+      "prix": "12 mensualités selon le trajet (devis sur le site MAX ACTIF)",
+      "effet": "250 réservations à 0 € par an sur TGV et TGV INOUI, du lundi au jeudi ; 2 trajets par jour au plus, espacés d'au moins 2 heures.",
       "conditions": [
-        "Réservé à une liste fermée de trajets fixée par SNCF Voyageurs : vérifier que Marseille - Paris en fait partie.",
-        "Échange gratuit jusqu'à 30 minutes après le départ, pour le même jour et le même trajet seulement.",
-        "Annulation possible jusqu'à 30 minutes après le départ si aucun échange n'a été fait.",
+        "Liste fermée de trajets fixée par SNCF Voyageurs ; Marseille - Paris en fait partie.",
+        "Places à 0 € dans la limite de celles attribuées : un train peut ne plus en proposer.",
+        "Échange gratuit jusqu'à 30 minutes après le départ, pour le même jour et le même trajet seulement ; annulation possible jusqu'à 30 minutes après le départ si aucun échange n'a été fait.",
+        "Engagement de 12 mois, reconduction tacite ; une mensualité supplémentaire en cas de résiliation anticipée.",
+        "OUIGO et TER exclus."
+      ],
+      "validiteAnnuelle": true,
+      "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
+      "verifieLe": "2026-11-09"
+    },
+    {
+      "id": "max-actif-plus",
+      "nom": "Abonnement MAX ACTIF+",
+      "categorie": "train",
+      "prix": "12 mensualités selon le trajet (devis sur le site MAX ACTIF)",
+      "effet": "450 réservations à 0 € par an sur TGV et TGV INOUI, 7 jours sur 7 ; 2 trajets par jour au plus, espacés d'au moins 2 heures.",
+      "conditions": [
+        "Liste fermée de trajets fixée par SNCF Voyageurs ; Marseille - Paris en fait partie.",
+        "Places à 0 € dans la limite de celles attribuées : un train peut ne plus en proposer.",
+        "Échange gratuit jusqu'à 30 minutes après le départ, pour le même jour et le même trajet ; non annulable plus de 30 minutes après le départ.",
         "Engagement de 12 mois, reconduction tacite ; une mensualité supplémentaire en cas de résiliation anticipée.",
         "OUIGO, trains de nuit et Transilien exclus."
       ],
       "validiteAnnuelle": true,
       "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
-      "verifieLe": "2026-10-31"
+      "verifieLe": "2026-11-09"
     },
     {
       "id": "carte-voyageur-sncf",

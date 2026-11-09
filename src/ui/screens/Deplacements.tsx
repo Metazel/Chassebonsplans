@@ -48,9 +48,12 @@ import { estAReverifier } from '../../domain/referentiel';
 import { listePanier } from '../../domain/panier';
 import { Panier } from '../components/Panier';
 import { Avantage } from '../components/Avantage';
+import { Abonnements, prixHabituelLu, texteMontant } from '../components/Abonnements';
+import { echantillonPrix, partLundiJeudi } from '../../domain/abonnements';
+import { REGLES_ABONNEMENTS } from '../../data/abonnements';
 import { PrixVus } from '../components/PrixVus';
 import { prixVuDe } from '../../domain/prix';
-import { figerBillets, planifier } from '../../domain/croises';
+import { dureeType, figerBillets, planifier } from '../../domain/croises';
 import { REGLES_AVANTAGE } from '../../data/avantage';
 import { OUVERTURES } from '../../data/ouvertures';
 import { REFERENTIEL_COUT } from '../../data/parametres';
@@ -560,6 +563,8 @@ export function Deplacements(props: {
   avantage: { detenue: boolean; finValidite?: string };
   prixHabituelCentimes?: number;
   onPrixHabituel: (centimes: number | undefined) => void;
+  /** Leviers train détenus et valides (identifiants du catalogue). */
+  detenus: ReadonlySet<string>;
 }) {
   const { deplacements, aujourdhui } = props;
   const [aller, setAller] = useState('');
@@ -568,6 +573,19 @@ export function Deplacements(props: {
   const [annonce, setAnnonce] = useState('');
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const [confirmerSelection, setConfirmerSelection] = useState(false);
+  // Prix habituel : saisie partagée par la carte Avantage et la comparaison des abonnements ; seule une valeur valide est enregistrée.
+  const [prixTexte, setPrixTexte] = useState(texteMontant(props.prixHabituelCentimes));
+  useEffect(() => {
+    // Le prix enregistré peut changer ailleurs (autre onglet, restauration) : le champ suit s'il est valide.
+    const v = prixHabituelLu(prixTexte);
+    if (v !== null && v !== props.prixHabituelCentimes) setPrixTexte(texteMontant(props.prixHabituelCentimes));
+  }, [props.prixHabituelCentimes]);
+  const saisirPrix = (texte: string) => {
+    setPrixTexte(texte);
+    const c = prixHabituelLu(texte);
+    if (c !== null && c !== props.prixHabituelCentimes) props.onPrixHabituel(c);
+  };
+  const prixHabituel = prixHabituelLu(prixTexte);
   const focusApres = useRef<string | null>(null);
   const h = props.horaires.etat === 'ok' ? props.horaires.horaires : null;
 
@@ -619,6 +637,11 @@ export function Deplacements(props: {
   const changer = (liste: Deplacement[]) => props.onChange(carteActive ? figerBillets(plan, liste, nouvelId) : liste);
   const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES, carteActive ? plan : undefined);
   const calendrierAncien = estAReverifier(OUVERTURES.meta.verifieLe, new Date(), 2);
+  // Rythme réel pour comparer les abonnements : dates de tous les trajets déclarés, prix payés ou vus pour les trains choisis.
+  const datesTrajets = deplacements.flatMap((d) => [d.aller.date, d.retour.date]);
+  const cartesDetenues = [REGLES_AVANTAGE.levier, REGLES_ABONNEMENTS.liberte.levier, REGLES_ABONNEMENTS.maxActif.levier, REGLES_ABONNEMENTS.maxActifPlus.levier].some((id) =>
+    props.detenus.has(id),
+  );
   const age = h ? ageHoraires(h, aujourdhui) : 0;
 
   const maj = (d: Deplacement) => changer(deplacements.map((x) => (x.id === d.id ? d : x)));
@@ -721,8 +744,17 @@ export function Deplacements(props: {
         detenue={carteActive}
         expiree={props.avantage.detenue && !carteActive}
         {...(props.avantage.finValidite ? { finValidite: props.avantage.finValidite } : {})}
-        {...(props.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: props.prixHabituelCentimes } : {})}
-        onPrixHabituel={props.onPrixHabituel}
+        {...(prixHabituel ? { prixHabituelCentimes: prixHabituel } : {})}
+      />
+      <Abonnements
+        datesTrajets={datesTrajets}
+        partCalculee={partLundiJeudi(datesTrajets)}
+        echantillon={echantillonPrix(REGLES_AVANTAGE, deplacements, aujourdhui)}
+        cartesDetenues={cartesDetenues}
+        dureeMin={dureeType(plan)}
+        detenus={props.detenus}
+        prixTexte={prixTexte}
+        onPrixTexte={saisirPrix}
       />
       {calendrierAncien && (
         <p class="alerte" role="status">

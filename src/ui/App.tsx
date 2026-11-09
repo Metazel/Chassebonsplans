@@ -186,7 +186,7 @@ export function App() {
   const resumeLeviers = (
     <p class="resume-leviers">
       {trainDetenus.length
-        ? `Vos leviers train : ${trainDetenus.map((l) => l.nom).join(', ')}. Ils seront pris en compte par le simulateur (itération suivante).`
+        ? `Vos leviers train : ${trainDetenus.map((l) => l.nom).join(', ')}. Saisissez le prix affiché par SNCF Connect : il tient déjà compte des cartes enregistrées dans votre compte.`
         : 'Aucun levier train déclaré.'}{' '}
       <a href="#leviers">Gérer mes leviers</a>
     </p>
@@ -257,6 +257,7 @@ export function App() {
             aujourdhui={aujourdhui}
             onChange={setDeplacements}
             avantage={avantageDeclaree(profil)}
+            detenus={new Set(trainDetenus.map((l) => l.id))}
             {...(profil.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: profil.prixHabituelCentimes } : {})}
             onPrixHabituel={(c) => {
               const p: Profil = { ...profilRef.current };

@@ -314,17 +314,6 @@ export function estimer(r: ReglesAvantage, plan: PlanAvantage, prixHabituelCenti
   return { economieCentimes: total, parTrajetCentimes: moyen, seuilTrajets: moyen > 0 ? Math.ceil(r.prixCarteCentimes / moyen) : null, estimes: gains.length, aPrixVu };
 }
 
-/**
- * Projection sur un an : `allersRetours` déplacements par an, croisés en chaîne d'une semaine à l'autre :
- * tous les trajets sont couverts sauf le premier aller et le dernier retour (si l'année en compte au moins 2).
- */
-export function projectionAnnuelle(r: ReglesAvantage, prixHabituelCentimes: number, allersRetours: number, dureeMin = DUREE_DEFAUT) {
-  const parTrajet = Math.max(0, prixHabituelCentimes - prixAvecCarte(r, prixHabituelCentimes, dureeMin));
-  const trajets = allersRetours >= 2 ? 2 * allersRetours - 2 : 0;
-  const brut = parTrajet * trajets;
-  return { trajets, economieCentimes: brut, netCentimes: brut - r.prixCarteCentimes };
-}
-
 /** Durée type (médiane) des trajets couverts, pour la projection ; 3 h 15 par défaut. */
 export function dureeType(plan: PlanAvantage): number {
   const d = jambesCouvertes(plan)

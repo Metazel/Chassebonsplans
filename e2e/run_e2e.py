@@ -248,7 +248,9 @@ def accessibilite(browser: Browser) -> None:
         ajouter_deplacement(page, "2026-11-09", "2026-11-11")  # trains en vente : liste « Réserver mes trains »
         page.get_by_role("region", name="Réserver mes trains").get_by_role("checkbox").first.check()  # panier à finaliser
         ajouter_deplacement(page, "2026-11-16", "2026-11-18")  # croisement possible avec la semaine du 9
-        page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")  # estimation Avantage
+        page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")  # estimation Avantage, tableau des abonnements
+        page.get_by_text("Mensualités de votre devis MAX ACTIF (facultatif)").click()
+        page.get_by_label("Mensualité MAX ACTIF (€)").fill("abc")  # erreur affichée
         page.get_by_text("Voir comment croiser les billets").click()
         page.get_by_text("Saisir les prix vus sur le site").first.click()  # saisie des prix et collage
         violations = axe(page)
@@ -282,6 +284,8 @@ def reflow(browser: Browser) -> None:
     page.goto(URL + "#deplacements")
     page.set_viewport_size({"width": 320, "height": 640})
     ajouter_deplacement(page, "2026-11-04", "2026-11-06")
+    page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")  # tableau des abonnements en cartes
+    expect(page.get_by_role("region", name="Cartes et abonnements : lequel pour votre rythme ?").locator("tbody tr")).to_have_count(5)
     page.add_style_tag(content="html { font-size: 100% !important; }")
     shot(page, "reflow-320-deplacements")
     assert page.evaluate(sans_defilement), "défilement horizontal à 320 px (déplacements)"
@@ -792,13 +796,9 @@ def avantage_interet(browser: Browser) -> None:
     expect(zone).to_contain_text("Aucun de vos 2 trajets à réserver ne profite de la carte")
     ajouter_deplacement(page, "2026-11-16", "2026-11-18")
     expect(zone).to_contain_text("4 de vos 4 trajets à réserver profiteraient de la carte (−30 %, prix plafonné à 89,00 € par trajet), dont 4 grâce aux billets croisés.")
-    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")
+    page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")
     expect(zone.locator(".estimation")).to_contain_text("Sur vos trajets planifiés : jusqu’à 120,00 € d’économie (4 trajets, jusqu’à 30,00 € par trajet).")
-    expect(zone.locator(".estimation")).to_contain_text("La carte vaut le coup : sur un an, à 40 allers-retours croisés")
-    zone.get_by_label("Allers-retours par an (estimation)").fill("1")
-    expect(zone.locator(".estimation")).to_contain_text("La carte ne vaut pas le coup à ce prix et à ce rythme")
-    zone.get_by_label("Allers-retours par an (estimation)").fill("99")
-    expect(zone.get_by_label("Allers-retours par an (estimation)")).to_have_attribute("aria-invalid", "true")
+    expect(zone).to_contain_text("Sur un an, comparez avec les autres cartes et abonnements")
     zone.get_by_text("Voir comment croiser les billets").click()
     expect(zone.locator("ul.billets li")).to_have_count(2)
     expect(zone.locator("ul.billets")).to_contain_text("Aller-retour croisé depuis Marseille : aller Marseille → Paris lun. 9 nov. à 06:03 (TGV INOUI 6136) ; retour Paris → Marseille mer. 18 nov. à 17:38 (TGV INOUI 6123).")
@@ -833,6 +833,75 @@ def avantage_plan(browser: Browser) -> None:
     assert p["deplacements"][1]["retour"]["statut"] == "a-reserver", p
     shot(page, "avantage-plan")
     assert not errors, errors
+
+
+@scenario("Itération 7 — cartes et abonnements : coût sur un an sans carte, Avantage, Liberté, MAX ACTIF, MAX ACTIF+")
+def abonnements(browser: Browser) -> None:
+    page, errors, external = new_page(browser, vue="deplacements")
+    zone = page.get_by_role("region", name="Cartes et abonnements : lequel pour votre rythme ?")
+    verdict = zone.locator(".verdict")
+    expect(verdict).to_contain_text("Indiquez votre prix habituel")
+    expect(zone.get_by_label("Trajets du lundi au jeudi (%)")).to_have_value("50")  # par défaut : retour le vendredi
+    # Rythme de David : 44 allers-retours à 60 €, retours le vendredi → carte Avantage (billets croisés).
+    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")
+    zone.get_by_label("Allers-retours par an (estimation)").fill("44")
+    expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 3\s781,00\s€ sur un an, soit 1\s499,00\s€ de moins que sans carte\."))
+    lignes = zone.locator("tbody tr")
+    expect(lignes).to_have_count(5)
+    expect(lignes.first).to_contain_text("Carte Avantage le moins cher")
+    expect(zone.locator("tbody")).to_contain_text("12 mensualités de 441,00 € (à confirmer par devis) ; 44 trajets à 0 €, 44 trajets au prix habituel ; engagement 12 mois.")
+    expect(zone.locator("tbody")).to_contain_text("aucun billet au-dessus du prix fixe de 73,00 €")
+    # Trajets chers, tous du lundi au jeudi : MAX ACTIF l'emporte.
+    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")
+    zone.get_by_label("Trajets du lundi au jeudi (%)").fill("100")
+    expect(verdict).to_contain_text(re.compile(r"MAX ACTIF : 5\s292,00\s€ sur un an, soit 3\s508,00\s€ de moins que sans carte et 977,00\s€ de moins que Carte Avantage\."))
+    expect(zone.get_by_label("Trajets du lundi au jeudi (%)")).to_have_attribute("aria-describedby", "part-lundi-jeudi-aide")
+    expect(zone.locator("#part-lundi-jeudi-aide")).to_contain_text("Votre estimation")
+    # Mensualité du devis : 600 € par mois, MAX ACTIF ne vaut plus le coup.
+    zone.get_by_text("Mensualités de votre devis MAX ACTIF (facultatif)").click()
+    expect(verdict).to_contain_text("Mensualité estimée : demandez un devis avant de vous engager pour 12 mois.")
+    zone.get_by_label("Mensualité MAX ACTIF (€)").fill("abc")  # erreur signalée tout de suite, liée au champ
+    expect(zone.get_by_label("Mensualité MAX ACTIF (€)")).to_have_attribute("aria-describedby", "devis-max-actif-err")
+    expect(zone.locator("#devis-max-actif-err")).to_contain_text("Montant invalide")
+    expect(verdict).to_contain_text("Corrigez les champs signalés pour comparer.")
+    zone.get_by_label("Mensualité MAX ACTIF (€)").fill("600")
+    expect(lignes.first).to_contain_text("Carte Avantage")
+    expect(zone.locator("tbody")).to_contain_text("12 mensualités de 600,00 € (votre devis)")
+    # Saisies invalides : signalées, pas de tableau trompeur.
+    zone.get_by_label("Allers-retours par an (estimation)").fill("151")
+    expect(zone.get_by_label("Allers-retours par an (estimation)")).to_have_attribute("aria-invalid", "true")
+    expect(zone.locator("#ar-par-an-err")).to_contain_text("Un nombre de 0 à 150.")
+    expect(verdict).to_contain_text("Corrigez les champs signalés pour comparer.")
+    expect(zone.locator("table")).to_have_count(0)
+    zone.get_by_label("Allers-retours par an (estimation)").fill("44")
+    zone.get_by_label("Mensualité MAX ACTIF (€)").fill("")
+    # Trajets déclarés : jeudi et vendredi, la part se calcule ; le prix payé sert de base si le prix habituel est vide.
+    ajouter_deplacement(page, "2026-11-12", "2026-11-13")
+    zone.get_by_label("Trajets du lundi au jeudi (%)").fill("50")
+    aller = bloc(page, "Aller")
+    aller.get_by_label("Réservation", exact=False).select_option("paye")
+    champ = aller.get_by_label("Prix payé (€, facultatif)")
+    champ.fill("80")
+    champ.blur()
+    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("")
+    expect(zone.locator("#prix-habituel-aide")).to_contain_text("Laissé vide : le prix payé ou vu sur le site pour votre train (TGV INOUI ou Intercités).")
+    expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 5\s025,00\s€ sur un an"))
+    attendre_enregistrement(page, lambda p: "prixHabituelCentimes" not in p)
+    # Abonnement déclaré dans Mes leviers : signalé dans la comparaison.
+    page.goto(URL + "#leviers")
+    page.locator("#lev-max-actif-detenu").check()
+    attendre_enregistrement(page, lambda p: "max-actif" in p.get("leviers", {}))
+    page.goto(URL + "#deplacements")
+    expect(zone.get_by_label("Trajets du lundi au jeudi (%)")).to_have_value("50")
+    expect(zone.locator("#part-lundi-jeudi-aide")).to_contain_text("D’après vos 2 trajets déclarés")
+    # Avec un abonnement déclaré, les prix payés ou vus sont déjà réduits : le prix sans carte est demandé.
+    expect(verdict).to_contain_text("Indiquez votre prix habituel sans carte pour comparer.")
+    expect(zone.locator("#prix-habituel-aide")).to_contain_text("tiennent déjà compte de vos cartes")
+    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")
+    expect(zone.locator("tbody")).to_contain_text("MAX ACTIF (vous l’avez)")
+    shot(page, "abonnements")
+    assert not errors, errors
+    assert not external, external
 
 
 def saisir_prix(zone, libelle: str, valeur: str) -> None:
@@ -932,7 +1001,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, prix_reels, retour_heure_diner, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, abonnements, prix_reels, retour_heure_diner, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:
