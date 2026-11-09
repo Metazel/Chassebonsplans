@@ -1,6 +1,6 @@
 # Chasse aux bons plans
 
-Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). Un retour qui arrive à l'heure du dîner (20h15-21h30 à Marseille) l'emporte s'il ne coûte pas plus de 15 € de plus que le moins cher en coût complet (soit 25 € d'écart de billet face à un retour tardif qui fait dîner à bord) ; à coût égal, celui qui ramène le plus tôt. Version 0.6.3.
+Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au **coût complet** : le prix du billet, plus ce que les horaires font dépenser (un repas à bord quand on rentre trop tard). Un retour qui arrive à l'heure du dîner (20h15-21h30 à Marseille) l'emporte s'il ne coûte pas plus de 15 € de plus que le moins cher en coût complet (soit 25 € d'écart de billet face à un retour tardif qui fait dîner à bord) ; à coût égal, celui qui ramène le plus tôt. Version 0.7.0.
 
 ## Ce que fait l'application
 
@@ -10,10 +10,11 @@ Préparer ses déplacements Marseille Saint-Charles ↔ Paris et les choisir au 
 - **Alertes SNCF Connect** : l'appli prépare l'alerte réservation ou petits prix (prix visé) à créer sur son compte SNCF Connect.
 - **Suppression** : bouton en tête de chaque déplacement, sélection multiple.
 - **Prix vus** : saisissez les prix lus sur le site, ou collez la page de résultats (lecture au mieux, à confirmer ; rien n'est envoyé ni conservé) ; l'appli affiche le coût complet de chaque train et recommande le moins cher, à 2 € près le plus tôt ; « Choisir le … » en un geste ; le prix vu devient le prix payé. Prix de plus de 2 jours écartés de la comparaison ; prix oubliés une fois le trajet payé ou passé.
-- **Carte Avantage et billets croisés** : sans la carte, combien de vos trajets en profiteraient (dont grâce au croisement d'une semaine à l'autre), économie maximale et verdict sur un an ; avec la carte déclarée, plan optimal de billets aller-retour à prendre, que suit la liste « Réserver mes trains ». Un billet engagé (au panier, en option, payé) n'est plus réapparié.
+- **Carte Avantage et billets croisés** : sans la carte, combien de vos trajets en profiteraient (dont grâce au croisement d'une semaine à l'autre), économie maximale sur les trajets planifiés ; avec la carte déclarée, plan optimal de billets aller-retour à prendre, que suit la liste « Réserver mes trains ». Un billet engagé (au panier, en option, payé) n'est plus réapparié.
+- **Cartes et abonnements** : coût sur un an, en 2de, sans carte, avec la carte Avantage (billets croisés), la carte Liberté (prix fixe de 73 € sur Paris - Marseille), MAX ACTIF (0 € du lundi au jeudi, 250 réservations) et MAX ACTIF+ (7 jours sur 7, 450 réservations), selon votre prix habituel (ou vos prix payés et vus), vos allers-retours par an et la part de vos trajets du lundi au jeudi (calculée sur vos déplacements). Mensualités MAX ACTIF non publiées par la SNCF : estimation sourcée, remplaçable par votre devis.
 - **Comparer** : saisissez 2 à 6 trains retour (départ, arrivée en gare, prix) ; l'appli recommande le meilleur au coût complet et en détaille le calcul. Un train incomplet ou un réglage invalide est signalé, jamais remplacé en silence.
 - **Réglages** : trajet gare → domicile, heure limite du dîner à la maison (heure théorique, sans marge de retard), prix d'un repas à bord, écart toléré (bornes comprises). Valeurs par défaut sourcées et datées.
-- **Mes leviers** : cartes, abonnements, assurance et services détenus (carte Avantage, Liberté, MAX ACTIF, carte Voyageur, Visa Premier, Pass Ulys, Fnac+), avec effet, conditions, source et date de vérification ; fin de validité facultative, alerte à l'expiration.
+- **Mes leviers** : cartes, abonnements, assurance et services détenus (carte Avantage, Liberté, MAX ACTIF, MAX ACTIF+, carte Voyageur, Visa Premier, Pass Ulys, Fnac+), avec effet, conditions, source et date de vérification ; fin de validité facultative, alerte à l'expiration.
 - **Mes données** : sauvegarde (fichier JSON, déplacements compris), restauration, suppression totale confirmée ; rappel de sauvegarde tous les 30 jours.
 
 Les déplacements terminés depuis plus de 24 mois sont effacés automatiquement.
