@@ -68,9 +68,9 @@ describe('retours à l’heure du dîner (décision du 08/11/2026)', () => {
     expect(r?.motif).toBe('egalite-prefere');
     expect(r?.concurrent?.id).toBe('tot');
   });
-  it('décision du 09/11 : jusqu’à 30 € de plus (coût complet) pour arriver à l’heure du dîner, bornes comprises', () => {
+  it('décision du 09/11 : jusqu’à 15 € de plus (coût complet, soit 25 € d’écart de billet face à un retour tardif) pour arriver à l’heure du dîner, bornes comprises', () => {
     const DIN = { fenetre: DINER, supplementMaxCentimes: REFERENTIEL_COUT.supplementDinerMaxCentimes };
-    expect(REFERENTIEL_COUT.supplementDinerMaxCentimes).toBe(3000);
+    expect(REFERENTIEL_COUT.supplementDinerMaxCentimes).toBe(1500);
     const a = { numero: '6123', depart: h('17:38'), arrivee: h('20:57') };
     const b = { numero: '6127', depart: h('18:38'), arrivee: h('22:00') };
     const vus = (pa: number, pb: number) => [
@@ -81,9 +81,11 @@ describe('retours à l’heure du dîner (décision du 08/11/2026)', () => {
     const r = recommanderParPrix([a, b], vus(4000, 2500), P, '2026-11-08', DIN);
     expect(r?.retenu.id).toBe(clePrix(a));
     expect(r?.motif).toBe('prefere');
-    // 30 € de plus pile : retenu ; 30,01 € de plus : le moins cher.
-    expect(recommanderParPrix([a, b], vus(6500, 2500), P, '2026-11-08', DIN)?.retenu.id).toBe(clePrix(a));
-    expect(recommanderParPrix([a, b], vus(6501, 2500), P, '2026-11-08', DIN)?.retenu.id).toBe(clePrix(b));
+    // 15 € de plus pile (billet à 50 €, 25 € d'écart de billet) : retenu ; 15,01 € de plus : le moins cher.
+    expect(recommanderParPrix([a, b], vus(5000, 2500), P, '2026-11-08', DIN)?.retenu.id).toBe(clePrix(a));
+    expect(recommanderParPrix([a, b], vus(5001, 2500), P, '2026-11-08', DIN)?.retenu.id).toBe(clePrix(b));
+    // Les 65 € tolérés par la règle à 30 € sont désormais refusés.
+    expect(recommanderParPrix([a, b], vus(6500, 2500), P, '2026-11-08', DIN)?.retenu.id).toBe(clePrix(b));
     // Sans préférence (aller, comparateur sans fenêtre) : la règle du coût complet seule.
     expect(recommanderParPrix([a, b], vus(4000, 2500), P, '2026-11-08')?.retenu.id).toBe(clePrix(b));
     // Le cas « sandwich » reste vrai : 30 € + 10 € contre 40 € → le 6123.

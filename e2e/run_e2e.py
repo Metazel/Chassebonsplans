@@ -138,11 +138,12 @@ def sandwich(browser: Browser) -> None:
     assert not external, external
 
 
-@scenario("CU4 — au-delà du supplément accepté pour le dîner (30 €), le moins cher l'emporte")
+@scenario("CU4 — au-delà du supplément accepté pour le dîner (15 €), le moins cher l'emporte")
 def moins_cher(browser: Browser) -> None:
     page, errors, _ = new_page(browser)
+    # 30 € + 10 € de dîner à bord = 40 € contre 55,01 € à l'heure du dîner : 15,01 € de plus, refusé.
     saisir_train(page, 1, "19:00", "22:00", "30")
-    saisir_train(page, 2, "17:45", "20:45", "75")
+    saisir_train(page, 2, "17:45", "20:45", "55,01")
     expect(page.locator(".reco")).to_contain_text("train 1 (19:00)")
     expect(page.locator(".resultat")).to_contain_text("coût complet le plus bas")
     assert not errors, errors
@@ -193,12 +194,12 @@ def reglage_invalide(browser: Browser) -> None:
 @scenario("Réglages : changer l'heure limite du dîner change la recommandation")
 def reglages(browser: Browser) -> None:
     page, errors, _ = new_page(browser)
-    # 19:00 → 22:00 à 30 € (+ 10 € de dîner à bord = 40 €) contre 17:45 → 20:45 à 70 €, à l'heure du dîner : 30 € de plus, accepté.
+    # 19:00 → 22:00 à 30 € (+ 10 € de dîner à bord = 40 €) contre 17:45 → 20:45 à 55 €, à l'heure du dîner : 15 € de plus, accepté.
     saisir_train(page, 1, "19:00", "22:00", "30")
-    saisir_train(page, 2, "17:45", "20:45", "70")
+    saisir_train(page, 2, "17:45", "20:45", "55")
     expect(page.locator(".reco")).to_contain_text("train 2 (17:45)")
-    expect(page.locator(".resultat")).to_contain_text("dans la limite de 30,00 € que vous acceptez")
-    # Dîner à la maison jusqu'à 23:00 : plus de repas à bord, l'écart passe à 40 € : le moins cher l'emporte.
+    expect(page.locator(".resultat")).to_contain_text("dans la limite de 15,00 € que vous acceptez")
+    # Dîner à la maison jusqu'à 23:00 : plus de repas à bord, l'écart passe à 25 € : le moins cher l'emporte.
     page.get_by_text("Réglages du coût complet").click()
     page.get_by_label("Dîner à la maison jusqu’à").fill("23:00")
     expect(page.locator(".reco")).to_contain_text("train 1 (19:00)")
@@ -854,11 +855,11 @@ def prix_reels(browser: Browser) -> None:
     expect(reco).to_contain_text("À 2,00 € près du 6127, il vous ramène plus tôt.")
     expect(reco).to_contain_text("C’est votre train choisi.")
     expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_have_accessible_name(re.compile(r"30,00\s€, coût complet 40,00\s€"))
-    # Décision du 09/11 : jusqu'à 30 € de plus (coût complet) pour arriver à l'heure du dîner.
+    # Décision du 09/11 : jusqu'à 15 € de plus (coût complet) pour arriver à l'heure du dîner.
     saisir_prix(retour, "Prix vu — 17:38 TGV INOUI 6123 (€)", "45")
     expect(reco).to_contain_text("TGV INOUI 6123 à 17:38, 45,00 €")
     expect(reco).to_contain_text("Il vous fait arriver à l’heure du dîner pour 5,00 € de plus que le 6127")
-    saisir_prix(retour, "Prix vu — 17:38 TGV INOUI 6123 (€)", "75")
+    saisir_prix(retour, "Prix vu — 17:38 TGV INOUI 6123 (€)", "56")
     expect(reco).to_contain_text("TGV INOUI 6127 à 18:38, 40,00 € dont 10,00 € de dîner à bord. C’est le moins cher.")
     reco.get_by_role("button", name="Choisir le 6127").click()
     expect(retour.get_by_role("radio", name="18:38 → 22:00", exact=False)).to_be_checked()
@@ -882,7 +883,7 @@ def prix_reels(browser: Browser) -> None:
     aller.get_by_label("Réservation", exact=False).select_option("paye")
     expect(aller.get_by_label("Prix payé (€, facultatif)")).to_have_value("29,00")
     p = attendre_enregistrement(page, lambda p: p["deplacements"][0]["aller"].get("prixCentimes") == 2900)
-    assert {x["train"]: x["centimes"] for x in p["deplacements"][0]["retour"]["prixVus"]} == {"6123|1058": 7500, "6127|1118": 3000}, p
+    assert {x["train"]: x["centimes"] for x in p["deplacements"][0]["retour"]["prixVus"]} == {"6123|1058": 5600, "6127|1118": 3000}, p
     shot(page, "prix-reels")
     assert not errors, errors
     assert not external, external

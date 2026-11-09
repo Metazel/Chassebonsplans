@@ -248,7 +248,7 @@ export function Comparateur(props: {
               maxLength={LONGUEUR_REGLAGE}
               libelle="Écart toléré (€)"
               inputMode="decimal"
-              aide="Jusqu’à cet écart compris, deux trains sont à égalité : celui qui ramène le plus tôt l’emporte (le retour à l’heure du dîner l’emporte, lui, jusqu’à 30 € de plus)."
+              aide={`Jusqu’à cet écart compris, deux trains sont à égalité : celui qui ramène le plus tôt l’emporte (le retour à l’heure du dîner l’emporte, lui, jusqu’à ${formaterMontant(REFERENTIEL_COUT.supplementDinerMaxCentimes)} de plus en coût complet).`}
               valeur={reglages.tolerance}
               erreur={erreursReglages.tolerance}
               onInput={(v) => setReglages((r) => ({ ...r, tolerance: v }))}
