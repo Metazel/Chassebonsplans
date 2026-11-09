@@ -9,7 +9,9 @@
  *   les autres au prix habituel.
  */
 import { estDateIso, jourSemaine } from './dates';
-import { prixAvecCarte, type ReglesAvantage } from './croises';
+import { operateurEligible, prixAvecCarte, type ReglesAvantage } from './croises';
+import { prixAncien, prixVuDe } from './prix';
+import type { Deplacement } from './deplacements';
 import type { MetaReferentiel } from './referentiel';
 
 export interface ReglesLiberte {
@@ -29,7 +31,7 @@ export interface ReglesMax {
   /** Jours (0 = lundi) où les réservations à 0 € sont possibles. */
   joursEligibles: number[];
   engagementMois: number;
-  meta: MetaReferentiel & { sourcePrix: string };
+  meta: MetaReferentiel & { sourcePrix: string; /** Date du relevé de la mensualité (pour l'alerte à 6 mois). */ prixReleveLe: string };
 }
 
 export interface ReglesAbonnements {
@@ -56,6 +58,12 @@ function sourcePrix(v: unknown, quoi: string): string {
   return s;
 }
 
+function prixReleveLe(v: unknown, quoi: string): string {
+  const d = (v as Record<string, unknown> | null)?.prixReleveLe;
+  if (!estDateIso(d)) throw invalide(`date du relevé du prix de ${quoi}`);
+  return d;
+}
+
 function formuleMax(v: unknown, quoi: string): ReglesMax {
   const r = v as Record<string, unknown> | null;
   if (!r || !texte(r.levier) || !texte(r.nom)) throw invalide(quoi);
@@ -69,7 +77,7 @@ function formuleMax(v: unknown, quoi: string): ReglesMax {
     reservationsParAn: r.reservationsParAn as number,
     joursEligibles: [...(j as number[])].sort((a, b) => a - b),
     engagementMois: r.engagementMois as number,
-    meta: { ...meta(r.meta, quoi), sourcePrix: sourcePrix(r.meta, quoi) },
+    meta: { ...meta(r.meta, quoi), sourcePrix: sourcePrix(r.meta, quoi), prixReleveLe: prixReleveLe(r.meta, quoi) },
   };
 }
 
@@ -173,4 +181,39 @@ export function partLundiJeudi(dates: string[]): number | null {
   const valides = dates.filter((d) => estDateIso(d));
   if (!valides.length) return null;
   return Math.round((100 * valides.filter((d) => jourSemaine(d) <= 3).length) / valides.length);
+}
+
+export interface Echantillon {
+  /** Prix sans carte retenus, en centimes. */
+  prix: number[];
+  /** Prix écartés : OUIGO ou Trenitalia, où aucune de ces formules ne s'applique. */
+  horsFormules: number;
+  /** Prix vus il y a plus de 2 jours, écartés comme dans la comparaison des trains. */
+  anciens: number;
+}
+
+/**
+ * Prix réels utilisables comme « prix sans carte » : payés, ou vus récemment sur le site pour le train choisi,
+ * sur TGV INOUI ou Intercités seulement. À n'utiliser que si le voyageur ne détient aucune carte ni abonnement :
+ * SNCF Connect affiche alors des prix déjà réduits, qu'il ne faut pas réduire une deuxième fois.
+ */
+export function echantillonPrix(ra: ReglesAvantage, liste: Deplacement[], aujourdhui: string): Echantillon {
+  const e: Echantillon = { prix: [], horsFormules: 0, anciens: 0 };
+  for (const t of liste.flatMap((d) => [d.aller, d.retour])) {
+    if (!t.train) continue;
+    let prix: number | undefined;
+    if (t.statut === 'paye') prix = t.prixCentimes || undefined;
+    else {
+      const vu = prixVuDe(t.prixVus, t.train);
+      if (vu && prixAncien(vu, aujourdhui)) {
+        e.anciens++;
+        continue;
+      }
+      prix = vu?.centimes;
+    }
+    if (prix === undefined) continue;
+    if (!operateurEligible(ra, t.train.operateur)) e.horsFormules++;
+    else e.prix.push(prix);
+  }
+  return e;
 }

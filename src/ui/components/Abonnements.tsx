@@ -2,16 +2,15 @@
  * Cartes et abonnements (CU4) : pour un rythme de déplacements, coût sur un an sans carte, avec la carte Avantage,
  * la carte Liberté, MAX ACTIF et MAX ACTIF+. Indicatif, 2de classe : les prix réels sont ceux du site de vente.
  */
-import { useEffect, useState } from 'preact/hooks';
+import { useState } from 'preact/hooks';
 import { dateLongue } from '../../domain/dates';
 import { formaterMontant } from '../../domain/argent';
 import { lirePrix } from '../../domain/deplacements';
-import { comparerFormules, type CoutFormule, type IdFormule, type Mensualites } from '../../domain/abonnements';
+import { comparerFormules, type CoutFormule, type Echantillon, type IdFormule, type Mensualites } from '../../domain/abonnements';
 import { estAReverifier } from '../../domain/referentiel';
 import { REGLES_ABONNEMENTS as R } from '../../data/abonnements';
 import { REGLES_AVANTAGE as RA } from '../../data/avantage';
 import { ExternalLink } from './ExternalLink';
-import { Champ } from './Champ';
 
 /** Part du lundi au jeudi supposée sans déplacement daté : aller en début de semaine, retour le vendredi. */
 export const PART_DEFAUT = 50;
@@ -32,7 +31,13 @@ const LEVIER: Partial<Record<IdFormule, string>> = {
 };
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
-const texteMontant = (c: number | undefined) => (c !== undefined ? String(c / 100).replace('.', ',') : '');
+export const texteMontant = (c: number | undefined) => (c !== undefined ? String(c / 100).replace('.', ',') : '');
+
+/** Prix habituel saisi : undefined si vide, null si invalide (0 compris), sinon en centimes. */
+export function prixHabituelLu(texte: string): number | undefined | null {
+  const c = lirePrix(texte);
+  return c === 0 ? null : c;
+}
 
 function detail(f: CoutFormule, prixMoyen: number, mensualite: number, devis: boolean): string {
   const payants = f.horsFormule ? `${pluriel(f.horsFormule, 'trajet')} au prix habituel` : '';
@@ -53,39 +58,40 @@ export function Abonnements(props: {
   datesTrajets: string[];
   /** Part du lundi au jeudi calculée sur ces dates (null si aucune). */
   partCalculee: number | null;
-  /** Prix payés ou vus sur le site pour les trains choisis, en centimes. */
-  prixObserves: number[];
+  /** Prix payés ou vus récemment pour les trains choisis (TGV INOUI, Intercités). */
+  echantillon: Echantillon;
+  /** Le voyageur détient une carte ou un abonnement train : ses prix payés et vus sont déjà réduits. */
+  cartesDetenues: boolean;
   dureeMin: number;
   /** Leviers détenus et valides (identifiants du catalogue). */
   detenus: ReadonlySet<string>;
-  prixHabituelCentimes?: number;
-  onPrixHabituel: (centimes: number | undefined) => void;
+  /** Saisie du prix habituel, partagée avec la carte Avantage (état tenu par l'écran). */
+  prixTexte: string;
+  onPrixTexte: (texte: string) => void;
 }) {
-  const [prix, setPrix] = useState(texteMontant(props.prixHabituelCentimes));
+  const prix = props.prixTexte;
   const [ar, setAr] = useState('40');
   const [part, setPart] = useState<string | null>(null);
   const [devis, setDevis] = useState({ maxActif: '', maxActifPlus: '' });
-  // Le prix enregistré peut changer ailleurs (autre onglet, restauration) : le champ suit s'il est valide.
-  useEffect(() => {
-    const v = lirePrix(prix);
-    if (v !== null && (v || undefined) !== props.prixHabituelCentimes) setPrix(texteMontant(props.prixHabituelCentimes));
-  }, [props.prixHabituelCentimes]);
+  const [devisOuvert, setDevisOuvert] = useState(false);
 
   const lu = lirePrix(prix);
-  const prixOk = lu !== null && (lu === undefined || (lu > 0 && lu <= 100_000));
+  const prixOk = prixHabituelLu(prix) !== null;
   const arParAn = /^\d{1,3}$/.test(ar.trim()) && Number(ar) <= AR_MAX ? Number(ar) : null;
   const partTexte = part ?? String(props.partCalculee ?? PART_DEFAUT);
   const partLue = /^\d{1,3}$/.test(partTexte.trim()) && Number(partTexte) <= 100 ? Number(partTexte) : null;
   const lireDevis = (v: string) => (v.trim() ? lirePrix(v) : undefined);
   const devisLus = { maxActif: lireDevis(devis.maxActif), maxActifPlus: lireDevis(devis.maxActifPlus) };
-  const devisOk = (v: number | null | undefined) => v !== null && (v === undefined || (v > 0 && v <= 500_000));
+  const devisOk = (v: number | null | undefined) => v !== null && v !== 0;
+  const devisErreur = !devisOk(devisLus.maxActif) || !devisOk(devisLus.maxActifPlus);
   const mensualites: Mensualites = {
     ...(devisLus.maxActif ? { maxActif: devisLus.maxActif } : {}),
     ...(devisLus.maxActifPlus ? { maxActifPlus: devisLus.maxActifPlus } : {}),
   };
 
-  // Base de prix : le prix habituel saisi, sinon les prix payés ou vus pour vos trains.
-  const echantillon = lu ? [lu] : props.prixObserves;
+  // Base de prix : le prix habituel saisi, sinon les prix payés ou vus pour vos trains, si aucune carte ne les a déjà réduits.
+  const observes = props.cartesDetenues ? [] : props.echantillon.prix;
+  const echantillon = lu ? [lu] : observes;
   const saisiesOk = prixOk && arParAn !== null && partLue !== null && devisOk(devisLus.maxActif) && devisOk(devisLus.maxActifPlus);
   const formules =
     saisiesOk && echantillon.length
@@ -95,7 +101,16 @@ export function Abonnements(props: {
   const premier = formules?.[0];
   const sans = formules?.find((f) => f.id === 'sans-carte');
   const second = formules?.[1];
-  const anciennes = [R.liberte, R.maxActif, R.maxActifPlus].some((f) => estAReverifier(f.meta.verifieLe, new Date())) || estAReverifier(RA.meta.verifieLe, new Date());
+  const maintenant = new Date();
+  const anciennes =
+    [R.liberte.meta.verifieLe, R.maxActif.meta.verifieLe, R.maxActif.meta.prixReleveLe, R.maxActifPlus.meta.verifieLe, R.maxActifPlus.meta.prixReleveLe, RA.meta.verifieLe].some((d) =>
+      estAReverifier(d, maintenant),
+    );
+  const ecartes = [
+    props.echantillon.horsFormules ? `${pluriel(props.echantillon.horsFormules, 'prix')} OUIGO ou Trenitalia` : '',
+    props.echantillon.anciens ? `${pluriel(props.echantillon.anciens, 'prix')} vu${props.echantillon.anciens > 1 ? 's' : ''} il y a plus de 2 jours` : '',
+  ].filter(Boolean);
+  const maxSansDevis = premier && ((premier.id === 'max-actif' && !mensualites.maxActif) || (premier.id === 'max-actif-plus' && !mensualites.maxActifPlus));
 
   return (
     <section class="abonnements" aria-labelledby="titre-abonnements">
@@ -118,13 +133,7 @@ export function Abonnements(props: {
             value={prix}
             aria-invalid={!prixOk ? 'true' : undefined}
             aria-describedby={!prixOk ? 'prix-habituel-err' : 'prix-habituel-aide'}
-            onInput={(e) => {
-              const v = (e.currentTarget as HTMLInputElement).value;
-              setPrix(v);
-              const c = lirePrix(v);
-              if (c === null || c === 0 || (c !== undefined && c > 100_000)) return;
-              props.onPrixHabituel(c);
-            }}
+            onInput={(e) => props.onPrixTexte((e.currentTarget as HTMLInputElement).value)}
           />
           {!prixOk ? (
             <span class="erreur" id="prix-habituel-err">
@@ -132,11 +141,14 @@ export function Abonnements(props: {
             </span>
           ) : (
             <span class="aide" id="prix-habituel-aide">
-              {props.prixObserves.length === 1
-                ? 'Laissé vide : le prix payé ou vu sur le site pour votre train.'
-                : props.prixObserves.length > 1
-                  ? `Laissé vide : la moyenne des ${props.prixObserves.length} prix payés ou vus sur le site pour vos trains.`
-                  : 'Le prix que vous payez d’ordinaire.'}
+              {props.cartesDetenues
+                ? 'Le prix sans carte : vos prix payés et vus sur SNCF Connect tiennent déjà compte de vos cartes.'
+                : observes.length === 1
+                  ? 'Laissé vide : le prix payé ou vu sur le site pour votre train (TGV INOUI ou Intercités).'
+                  : observes.length > 1
+                    ? `Laissé vide : la moyenne des ${observes.length} prix payés ou vus sur le site pour vos trains (TGV INOUI ou Intercités).`
+                    : 'Le prix que vous payez d’ordinaire, sans carte.'}
+              {!lu && !props.cartesDetenues && ecartes.length > 0 && ` Écartés : ${ecartes.join(', ')}.`}
             </span>
           )}
         </div>
@@ -187,34 +199,54 @@ export function Abonnements(props: {
           )}
         </div>
       </div>
-      <details>
+      <details open={devisOuvert || devisErreur} onToggle={(e) => setDevisOuvert((e.currentTarget as HTMLDetailsElement).open)}>
         <summary>Mensualités de votre devis MAX ACTIF (facultatif)</summary>
         <p class="aide">
           La SNCF ne publie pas les mensualités : sans devis, l’estimation prend {formaterMontant(R.maxActif.mensualiteCentimes)} (MAX ACTIF) et{' '}
-          {formaterMontant(R.maxActifPlus.mensualiteCentimes)} (MAX ACTIF+) par mois en 2de, prix relevés par{' '}
-          <ExternalLink href={R.maxActif.meta.sourcePrix}>Milesopedia</ExternalLink> en août 2026.
+          {formaterMontant(R.maxActifPlus.mensualiteCentimes)} (MAX ACTIF+) par mois en 2de, relevés par <ExternalLink href={R.maxActif.meta.sourcePrix}>Milesopedia</ExternalLink> le{' '}
+          {dateLongue(R.maxActif.meta.prixReleveLe)}.
         </p>
-        <Champ
-          id="devis-max-actif"
-          libelle="Mensualité MAX ACTIF (€)"
-          inputMode="decimal"
-          maxLength={10}
-          valeur={devis.maxActif}
-          erreur={devisOk(devisLus.maxActif) ? undefined : 'Montant invalide : en euros, par exemple 441.'}
-          onInput={(v) => setDevis((d) => ({ ...d, maxActif: v }))}
-        />
-        <Champ
-          id="devis-max-actif-plus"
-          libelle="Mensualité MAX ACTIF+ (€)"
-          inputMode="decimal"
-          maxLength={10}
-          valeur={devis.maxActifPlus}
-          erreur={devisOk(devisLus.maxActifPlus) ? undefined : 'Montant invalide : en euros, par exemple 702.'}
-          onInput={(v) => setDevis((d) => ({ ...d, maxActifPlus: v }))}
-        />
+        {(
+          [
+            ['maxActif', 'devis-max-actif', 'Mensualité MAX ACTIF (€)', '441'],
+            ['maxActifPlus', 'devis-max-actif-plus', 'Mensualité MAX ACTIF+ (€)', '702'],
+          ] as const
+        ).map(([cle, id, libelle, exemple]) => {
+          const ok = devisOk(devisLus[cle]);
+          return (
+            <div class="champ champ-court" key={id}>
+              <label for={id}>{libelle}</label>
+              <input
+                id={id}
+                type="text"
+                inputMode="decimal"
+                maxLength={10}
+                autoComplete="off"
+                value={devis[cle]}
+                aria-invalid={ok ? undefined : 'true'}
+                aria-describedby={ok ? undefined : `${id}-err`}
+                onInput={(e) => {
+                  const v = (e.currentTarget as HTMLInputElement).value;
+                  setDevis((d) => ({ ...d, [cle]: v }));
+                }}
+              />
+              {!ok && (
+                <span class="erreur" id={`${id}-err`}>
+                  Montant invalide : en euros, de 0,01 à 1 000, par exemple {exemple}.
+                </span>
+              )}
+            </div>
+          );
+        })}
       </details>
       <div class="verdict" aria-live="polite">
-        {!echantillon.length && prixOk && <p>Indiquez votre prix habituel, ou saisissez les prix vus sur le site pour vos trains, pour comparer.</p>}
+        {!echantillon.length && prixOk && (
+          <p>
+            {props.cartesDetenues
+              ? 'Indiquez votre prix habituel sans carte pour comparer.'
+              : 'Indiquez votre prix habituel, ou saisissez les prix vus sur le site pour vos trains, pour comparer.'}
+          </p>
+        )}
         {echantillon.length > 0 && !saisiesOk && <p>Corrigez les champs signalés pour comparer.</p>}
         {premier && sans && (
           <p>
@@ -228,7 +260,13 @@ export function Abonnements(props: {
                   {NOMS[premier.id]} : {formaterMontant(premier.coutCentimes)} sur un an
                 </strong>
                 , soit {formaterMontant(sans.coutCentimes - premier.coutCentimes)} de moins que sans carte
-                {second && second.id !== 'sans-carte' ? ` et ${formaterMontant(second.coutCentimes - premier.coutCentimes)} de moins que ${NOMS[second.id]}` : ''}.
+                {second && second.id !== 'sans-carte'
+                  ? second.coutCentimes === premier.coutCentimes
+                    ? `, à égalité avec ${NOMS[second.id]}`
+                    : ` et ${formaterMontant(second.coutCentimes - premier.coutCentimes)} de moins que ${NOMS[second.id]}`
+                  : ''}
+                .
+                {maxSansDevis && ' Mensualité estimée : demandez un devis avant de vous engager pour 12 mois.'}
               </>
             )}
           </p>
@@ -273,11 +311,13 @@ export function Abonnements(props: {
           habituel varie, plus elle rapporte : laissez le prix habituel vide pour calculer sur vos prix réels.
         </li>
         <li>MAX ACTIF et MAX ACTIF+ : TGV INOUI seulement, places à 0 € dans la limite de celles attribuées, engagement de 12 mois.</li>
-        <li>Les prix affichés par SNCF Connect tiennent déjà compte des cartes enregistrées dans votre compte SNCF Connect. Repas à bord non comptés.</li>
+        <li>Non comptés : les combinaisons (MAX ACTIF et carte Avantage pour les trajets du vendredi, tarif Avantage de la carte Liberté pour les voyages personnels), la 1re classe, les repas à bord.</li>
+        <li>Les prix affichés par SNCF Connect tiennent déjà compte des cartes enregistrées dans votre compte SNCF Connect.</li>
       </ul>
       <p class="aide">
         Sources : <ExternalLink href={R.liberte.meta.source}>carte Liberté</ExternalLink>, <ExternalLink href={R.maxActif.meta.source}>MAX ACTIF et MAX ACTIF+</ExternalLink>,{' '}
-        <ExternalLink href={RA.meta.source}>carte Avantage</ExternalLink>, vérifiées le {dateLongue(R.maxActif.meta.verifieLe)}. Outil indicatif, non affilié.
+        <ExternalLink href={RA.meta.source}>carte Avantage</ExternalLink>. Liberté et MAX vérifiées le {dateLongue(R.maxActif.meta.verifieLe)}, carte Avantage le{' '}
+        {dateLongue(RA.meta.verifieLe)}. Outil indicatif, non affilié.
       </p>
     </section>
   );

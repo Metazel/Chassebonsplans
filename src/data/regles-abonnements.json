@@ -27,7 +27,8 @@
       "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
       "verifieLe": "2026-11-09",
       "notes": "250 réservations à 0 € par an, du lundi au jeudi, 2 trajets par jour au plus, sur TGV et TGV INOUI (hors OUIGO), dans la limite des places attribuées. Engagement 12 mois (une mensualité de plus en cas de résiliation anticipée). Marseille - Paris éligible (SNCF Connect, page Marseille - Paris). Mensualité en 2de non publiée par la SNCF (devis sur le site MAX ACTIF) : 441 € selon Milesopedia (https://milesopedia.fr/transports/max-actif-sncf-prix/, mis à jour le 14/08/2026), après la réévaluation du 1er avril 2026 ; à confirmer par devis.",
-      "sourcePrix": "https://milesopedia.fr/transports/max-actif-sncf-prix/"
+      "sourcePrix": "https://milesopedia.fr/transports/max-actif-sncf-prix/",
+      "prixReleveLe": "2026-08-14"
     }
   },
   "maxActifPlus": {
@@ -49,7 +50,8 @@
       "source": "https://www.sncf-voyageurs.com/fr/voyagez-avec-nous/en-france/tarifs-grandes-lignes/abonnements-max/max-actif-et-max-actif/",
       "verifieLe": "2026-11-09",
       "notes": "450 réservations à 0 € par an, 7 jours sur 7, 2 trajets par jour au plus, sur TGV et TGV INOUI à réservation obligatoire (hors OUIGO, trains de nuit et Transilien). Engagement 12 mois. Mensualité en 2de non publiée par la SNCF : 702 € selon Milesopedia (mis à jour le 14/08/2026) ; à confirmer par devis.",
-      "sourcePrix": "https://milesopedia.fr/transports/max-actif-sncf-prix/"
+      "sourcePrix": "https://milesopedia.fr/transports/max-actif-sncf-prix/",
+      "prixReleveLe": "2026-08-14"
     }
   }
 }

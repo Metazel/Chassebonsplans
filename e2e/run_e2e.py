@@ -248,7 +248,9 @@ def accessibilite(browser: Browser) -> None:
         ajouter_deplacement(page, "2026-11-09", "2026-11-11")  # trains en vente : liste « Réserver mes trains »
         page.get_by_role("region", name="Réserver mes trains").get_by_role("checkbox").first.check()  # panier à finaliser
         ajouter_deplacement(page, "2026-11-16", "2026-11-18")  # croisement possible avec la semaine du 9
-        page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")  # estimation Avantage
+        page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")  # estimation Avantage, tableau des abonnements
+        page.get_by_text("Mensualités de votre devis MAX ACTIF (facultatif)").click()
+        page.get_by_label("Mensualité MAX ACTIF (€)").fill("abc")  # erreur affichée
         page.get_by_text("Voir comment croiser les billets").click()
         page.get_by_text("Saisir les prix vus sur le site").first.click()  # saisie des prix et collage
         violations = axe(page)
@@ -282,6 +284,8 @@ def reflow(browser: Browser) -> None:
     page.goto(URL + "#deplacements")
     page.set_viewport_size({"width": 320, "height": 640})
     ajouter_deplacement(page, "2026-11-04", "2026-11-06")
+    page.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")  # tableau des abonnements en cartes
+    expect(page.get_by_role("region", name="Cartes et abonnements : lequel pour votre rythme ?").locator("tbody tr")).to_have_count(5)
     page.add_style_tag(content="html { font-size: 100% !important; }")
     shot(page, "reflow-320-deplacements")
     assert page.evaluate(sans_defilement), "défilement horizontal à 320 px (déplacements)"
@@ -855,6 +859,11 @@ def abonnements(browser: Browser) -> None:
     expect(zone.locator("#part-lundi-jeudi-aide")).to_contain_text("Votre estimation")
     # Mensualité du devis : 600 € par mois, MAX ACTIF ne vaut plus le coup.
     zone.get_by_text("Mensualités de votre devis MAX ACTIF (facultatif)").click()
+    expect(verdict).to_contain_text("Mensualité estimée : demandez un devis avant de vous engager pour 12 mois.")
+    zone.get_by_label("Mensualité MAX ACTIF (€)").fill("abc")  # erreur signalée tout de suite, liée au champ
+    expect(zone.get_by_label("Mensualité MAX ACTIF (€)")).to_have_attribute("aria-describedby", "devis-max-actif-err")
+    expect(zone.locator("#devis-max-actif-err")).to_contain_text("Montant invalide")
+    expect(verdict).to_contain_text("Corrigez les champs signalés pour comparer.")
     zone.get_by_label("Mensualité MAX ACTIF (€)").fill("600")
     expect(lignes.first).to_contain_text("Carte Avantage")
     expect(zone.locator("tbody")).to_contain_text("12 mensualités de 600,00 € (votre devis)")
@@ -875,7 +884,7 @@ def abonnements(browser: Browser) -> None:
     champ.fill("80")
     champ.blur()
     zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("")
-    expect(zone.locator("#prix-habituel-aide")).to_contain_text("Laissé vide : le prix payé ou vu sur le site pour votre train.")
+    expect(zone.locator("#prix-habituel-aide")).to_contain_text("Laissé vide : le prix payé ou vu sur le site pour votre train (TGV INOUI ou Intercités).")
     expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 5\s025,00\s€ sur un an"))
     attendre_enregistrement(page, lambda p: "prixHabituelCentimes" not in p)
     # Abonnement déclaré dans Mes leviers : signalé dans la comparaison.
@@ -885,6 +894,10 @@ def abonnements(browser: Browser) -> None:
     page.goto(URL + "#deplacements")
     expect(zone.get_by_label("Trajets du lundi au jeudi (%)")).to_have_value("50")
     expect(zone.locator("#part-lundi-jeudi-aide")).to_contain_text("D’après vos 2 trajets déclarés")
+    # Avec un abonnement déclaré, les prix payés ou vus sont déjà réduits : le prix sans carte est demandé.
+    expect(verdict).to_contain_text("Indiquez votre prix habituel sans carte pour comparer.")
+    expect(zone.locator("#prix-habituel-aide")).to_contain_text("tiennent déjà compte de vos cartes")
+    zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")
     expect(zone.locator("tbody")).to_contain_text("MAX ACTIF (vous l’avez)")
     shot(page, "abonnements")
     assert not errors, errors

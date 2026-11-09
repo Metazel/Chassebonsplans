@@ -3,7 +3,9 @@ import brut from '../src/data/regles-abonnements.json';
 import { REGLES_ABONNEMENTS as R } from '../src/data/abonnements';
 import { REGLES_AVANTAGE as RA } from '../src/data/avantage';
 import { LEVIERS } from '../src/data/leviers';
-import { comparerFormules, partLundiJeudi, validerAbonnements, type CoutFormule, type Rythme } from '../src/domain/abonnements';
+import { comparerFormules, echantillonPrix, partLundiJeudi, validerAbonnements, type CoutFormule, type Rythme } from '../src/domain/abonnements';
+import { nouveauDeplacement, type Deplacement, type TrainChoisi } from '../src/domain/deplacements';
+import { clePrix } from '../src/domain/prix';
 import { estAReverifier } from '../src/domain/referentiel';
 
 const rythme = (ar: number, prix: number[], part = 100, dureeMin = 195): Rythme => ({ allersRetoursParAn: ar, prixCentimes: prix, partLundiJeudi: part, dureeMin });
@@ -31,6 +33,7 @@ describe('référentiel des abonnements (EXG-10)', () => {
     ['source non https', (r: ReturnType<typeof copie>) => ((r.liberte!.meta as Record<string, unknown>).source = 'http://exemple.fr')],
     ['date de vérification', (r: ReturnType<typeof copie>) => ((r.maxActifPlus!.meta as Record<string, unknown>).verifieLe = 'hier')],
     ['source du prix MAX absente', (r: ReturnType<typeof copie>) => delete (r.maxActif!.meta as Record<string, unknown>).sourcePrix],
+    ['date du relevé du prix MAX', (r: ReturnType<typeof copie>) => ((r.maxActifPlus!.meta as Record<string, unknown>).prixReleveLe = '2026-02-30')],
     ['prix fixe absent', (r: ReturnType<typeof copie>) => delete r.liberte!.prixFixeCentimes],
     ['formule absente', (r: ReturnType<typeof copie>) => delete (r as Record<string, unknown>).maxActifPlus],
   ])('refusé : %s', (_, casser) => {
@@ -75,6 +78,13 @@ describe('coût sur un an de chaque formule (2de)', () => {
     const fs = comparerFormules(R, RA, rythme(150, [5000], 100));
     expect(cout(fs, 'max-actif')).toMatchObject({ couverts: 250, horsFormule: 50, billetsCentimes: 50 * 5000 });
     expect(cout(fs, 'max-actif-plus')).toMatchObject({ couverts: 300, horsFormule: 0 });
+  });
+  it('carte Liberté : un billet à 73 € pile n’en profite pas (borne), à 73,01 € il est ramené à 73 €', () => {
+    expect(cout(comparerFormules(R, RA, rythme(10, [7300])), 'liberte')).toMatchObject({ couverts: 0, billetsCentimes: 20 * 7300 });
+    expect(cout(comparerFormules(R, RA, rythme(10, [7301])), 'liberte')).toMatchObject({ couverts: 20, billetsCentimes: 20 * 7300 });
+  });
+  it('MAX ACTIF+ : réservations limitées à 450 par an', () => {
+    expect(cout(comparerFormules(R, RA, rythme(300, [5000], 0)), 'max-actif-plus')).toMatchObject({ couverts: 450, horsFormule: 150, billetsCentimes: 150 * 5000 });
   });
   it('MAX ACTIF+ couvre tous les jours, quelle que soit la part du lundi au jeudi', () => {
     expect(cout(comparerFormules(R, RA, rythme(20, [5000], 0)), 'max-actif-plus').couverts).toBe(40);
@@ -124,5 +134,29 @@ describe('part des trajets du lundi au jeudi', () => {
   it('aucune date valide : null', () => {
     expect(partLundiJeudi([])).toBeNull();
     expect(partLundiJeudi(['2026-02-30'])).toBeNull();
+  });
+});
+
+describe('prix réels utilisés comme prix sans carte', () => {
+  const INOUI: TrainChoisi = { numero: '6123', operateur: 'TGV INOUI', depart: 1058, arrivee: 1257 };
+  const OUIGO: TrainChoisi = { numero: '7821', operateur: 'OUIGO', depart: 1072, arrivee: 1270 };
+  const AUJ = '2026-11-09';
+  const dep = (id: string, aller: Partial<Deplacement['aller']>, retour: Partial<Deplacement['retour']> = {}): Deplacement => {
+    const d = nouveauDeplacement(id, '2026-11-12', '2026-11-13');
+    return { ...d, aller: { ...d.aller, ...aller }, retour: { ...d.retour, ...retour } };
+  };
+  it('prix payés et prix vus récents pour le train choisi, TGV INOUI seulement', () => {
+    const liste = [
+      dep('a', { train: INOUI, statut: 'paye', prixCentimes: 8000 }, { train: INOUI, prixVus: [{ train: clePrix(INOUI), centimes: 6000, le: AUJ }] }),
+      dep('b', { train: OUIGO, statut: 'paye', prixCentimes: 2900 }, { train: OUIGO, prixVus: [{ train: clePrix(OUIGO), centimes: 3500, le: AUJ }] }),
+    ];
+    expect(echantillonPrix(RA, liste, AUJ)).toEqual({ prix: [8000, 6000], horsFormules: 2, anciens: 0 });
+  });
+  it('prix vu il y a plus de 2 jours écarté ; prix vu pour un autre train ignoré ; payé sans prix ignoré', () => {
+    const liste = [
+      dep('a', { train: INOUI, prixVus: [{ train: clePrix(INOUI), centimes: 6000, le: '2026-11-06' }] }, { train: INOUI, prixVus: [{ train: clePrix(OUIGO), centimes: 2900, le: AUJ }] }),
+      dep('b', { train: INOUI, statut: 'paye' }, { statut: 'paye', prixCentimes: 5000 }),
+    ];
+    expect(echantillonPrix(RA, liste, AUJ)).toEqual({ prix: [], horsFormules: 0, anciens: 1 });
   });
 });
