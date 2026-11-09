@@ -194,7 +194,18 @@ export function App() {
 
   return (
     <>
-      <a class="evitement" href="#contenu">
+      <a
+        class="evitement"
+        href="#contenu"
+        onClick={(e) => {
+          // Focus explicite : ne dépend pas du traitement asynchrone de l'ancre par le navigateur.
+          const main = document.getElementById('contenu');
+          if (main) {
+            e.preventDefault();
+            main.focus();
+          }
+        }}
+      >
         Aller au contenu
       </a>
       <header>
