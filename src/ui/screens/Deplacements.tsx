@@ -48,9 +48,11 @@ import { estAReverifier } from '../../domain/referentiel';
 import { listePanier } from '../../domain/panier';
 import { Panier } from '../components/Panier';
 import { Avantage } from '../components/Avantage';
+import { Abonnements } from '../components/Abonnements';
+import { partLundiJeudi } from '../../domain/abonnements';
 import { PrixVus } from '../components/PrixVus';
 import { prixVuDe } from '../../domain/prix';
-import { figerBillets, planifier } from '../../domain/croises';
+import { dureeType, figerBillets, planifier } from '../../domain/croises';
 import { REGLES_AVANTAGE } from '../../data/avantage';
 import { OUVERTURES } from '../../data/ouvertures';
 import { REFERENTIEL_COUT } from '../../data/parametres';
@@ -560,6 +562,8 @@ export function Deplacements(props: {
   avantage: { detenue: boolean; finValidite?: string };
   prixHabituelCentimes?: number;
   onPrixHabituel: (centimes: number | undefined) => void;
+  /** Leviers train détenus et valides (identifiants du catalogue). */
+  detenus: ReadonlySet<string>;
 }) {
   const { deplacements, aujourdhui } = props;
   const [aller, setAller] = useState('');
@@ -619,6 +623,14 @@ export function Deplacements(props: {
   const changer = (liste: Deplacement[]) => props.onChange(carteActive ? figerBillets(plan, liste, nouvelId) : liste);
   const groupesPanier = listePanier(deplacements, aujourdhui, maintenant, OUVERTURES, carteActive ? plan : undefined);
   const calendrierAncien = estAReverifier(OUVERTURES.meta.verifieLe, new Date(), 2);
+  // Rythme réel pour comparer les abonnements : dates de tous les trajets déclarés, prix payés ou vus pour les trains choisis.
+  const trajets = deplacements.flatMap((d) => [d.aller, d.retour]);
+  const datesTrajets = trajets.map((t) => t.date);
+  const prixObserves = trajets.flatMap((t) => {
+    if (t.statut === 'paye' && t.prixCentimes) return [t.prixCentimes];
+    const vu = t.train ? prixVuDe(t.prixVus, t.train) : undefined;
+    return vu ? [vu.centimes] : [];
+  });
   const age = h ? ageHoraires(h, aujourdhui) : 0;
 
   const maj = (d: Deplacement) => changer(deplacements.map((x) => (x.id === d.id ? d : x)));
@@ -721,6 +733,14 @@ export function Deplacements(props: {
         detenue={carteActive}
         expiree={props.avantage.detenue && !carteActive}
         {...(props.avantage.finValidite ? { finValidite: props.avantage.finValidite } : {})}
+        {...(props.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: props.prixHabituelCentimes } : {})}
+      />
+      <Abonnements
+        datesTrajets={datesTrajets}
+        partCalculee={partLundiJeudi(datesTrajets)}
+        prixObserves={prixObserves}
+        dureeMin={dureeType(plan)}
+        detenus={props.detenus}
         {...(props.prixHabituelCentimes !== undefined ? { prixHabituelCentimes: props.prixHabituelCentimes } : {})}
         onPrixHabituel={props.onPrixHabituel}
       />

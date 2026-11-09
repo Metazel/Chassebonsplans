@@ -84,7 +84,10 @@ th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--bord)
 tr.retenu { background: var(--retenu); }
 .badge { font-weight: 700; color: var(--accent); }
 /* Requête de conteneur en em : la mise en cartes suit aussi la taille du texte (RGAA 10.4, zoom 200 %). */
-.resultat { container-type: inline-size; }
+.resultat, .tableau { container-type: inline-size; }
+.tableau { margin: 0.75rem 0; }
+.champs-ligne { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.hypotheses { padding-left: 1.25rem; }
 @container (max-width: 34em) {
   table, caption, thead, tbody, tr, th, td { display: block; }
   caption { width: 100%; }

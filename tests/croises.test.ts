@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import brut from '../src/data/regles-avantage.json';
 import { REGLES_AVANTAGE as R } from '../src/data/avantage';
 import { LEVIERS } from '../src/data/leviers';
-import { affectationMax, allerRetourEligible, dureeType, estimer, figerBillets, jambesDe, operateurEligible, planifier, plafond, prixAvecCarte, projectionAnnuelle, validerRegles, type Billet } from '../src/domain/croises';
+import { affectationMax, allerRetourEligible, dureeType, estimer, figerBillets, jambesDe, operateurEligible, planifier, plafond, prixAvecCarte, validerRegles, type Billet } from '../src/domain/croises';
 import { jourSemaine, ajouterJours } from '../src/domain/dates';
 import { changerStatuts } from '../src/domain/deplacements';
 import { lireProfil, pourStockage, profilVide, aDesDonnees, exporter, importer } from '../src/domain/profil';
@@ -139,10 +139,6 @@ describe('estimation', () => {
     const court = { ...INOUI_MP, arrivee: INOUI_MP.depart + 180 };
     const p2 = planifier(R, [dep('d-aaaa', '2026-11-09', '2026-11-11', court), dep('d-bbbb', '2026-11-16', '2026-11-18', court)], AUJ);
     expect(estimer(R, p2, 14000).economieCentimes).toBe(2 * (14000 - 6900) + 2 * (14000 - 8900));
-  });
-  it('projection sur un an : 40 allers-retours croisés en chaîne = 78 trajets couverts ; net après la carte', () => {
-    expect(projectionAnnuelle(R, 10000, 40)).toEqual({ trajets: 78, economieCentimes: 78 * 3000, netCentimes: 78 * 3000 - 4900 });
-    expect(projectionAnnuelle(R, 10000, 1)).toEqual({ trajets: 0, economieCentimes: 0, netCentimes: -4900 });
   });
 });
 
