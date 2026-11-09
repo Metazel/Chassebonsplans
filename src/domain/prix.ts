@@ -50,22 +50,27 @@ export const prixAncien = (p: PrixVu, aujourdhui: string) => ecartJours(p.le, au
 
 /**
  * Recommandation au coût complet parmi les trains dont le prix est connu (règle du CLAUDE.md :
- * le moins cher, et à égalité à la tolérance près, celui qui arrive le plus tôt).
+ * le moins cher, à égalité celui qui arrive le plus tôt ; au retour, le train à l'heure du dîner
+ * l'emporte jusqu'au supplément accepté).
  */
 export function recommanderParPrix(
   trains: readonly { numero: string; depart: number; arrivee: number }[],
   prixVus: PrixVu[] | undefined,
   p: ParametresCout,
   aujourdhui?: string,
-  /** Retour : fenêtre d'arrivée en gare à privilégier à égalité de coût (heure du dîner). */
-  fenetreDiner?: { de: number; a: number },
+  /** Retour : fenêtre d'arrivée en gare à privilégier (heure du dîner) et supplément de coût complet accepté. */
+  diner?: { fenetre: { de: number; a: number }; supplementMaxCentimes: number },
 ): Recommandation | null {
   const avecPrix = trains.flatMap((t) => {
     const pv = prixVuDe(prixVus, t);
     // Un prix vu il y a plus de 2 jours n'entre pas dans la comparaison : il a pu changer.
     return pv && !(aujourdhui && prixAncien(pv, aujourdhui)) ? [{ id: clePrix(t), depart: t.depart % 1440, arrivee: t.arrivee % 1440, prixCentimes: pv.centimes }] : [];
   });
-  return recommander(avecPrix, p, fenetreDiner ? (e) => e.arriveeGare >= fenetreDiner.de && e.arriveeGare <= fenetreDiner.a : undefined);
+  return recommander(
+    avecPrix,
+    p,
+    diner ? { estPrefere: (e) => e.arriveeGare >= diner.fenetre.de && e.arriveeGare <= diner.fenetre.a, supplementMaxCentimes: diner.supplementMaxCentimes } : undefined,
+  );
 }
 
 export interface LigneCollee {

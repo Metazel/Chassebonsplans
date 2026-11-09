@@ -30,6 +30,15 @@ function nomTrain(e: Evaluation, lignes: LigneTrain[]): string {
 function Explication({ reco, lignes, parametres }: { reco: Recommandation; lignes: LigneTrain[]; parametres: ParametresCout }) {
   const { retenu, motif, concurrent } = reco;
   if (motif === 'moins-cher') return <>C’est le coût complet le plus bas : {formaterMontant(retenu.coutCompletCentimes)}.</>;
+  if (motif === 'prefere' && concurrent) {
+    return (
+      <>
+        Il vous fait arriver à l’heure du dîner pour {formaterMontant(retenu.coutCompletCentimes - concurrent.coutCompletCentimes)} de plus que le{' '}
+        {nomTrain(concurrent, lignes)} (coût complet, dîner à bord compris) : dans la limite de{' '}
+        {formaterMontant(reco.supplementMaxCentimes ?? REFERENTIEL_COUT.supplementDinerMaxCentimes)} que vous acceptez.
+      </>
+    );
+  }
   if (motif === 'egalite-prefere' && concurrent) {
     return (
       <>
@@ -122,12 +131,18 @@ export function Comparateur(props: {
   const lues = lignes.map(lireLigne);
   const { parametres, erreurs: erreursReglages } = lireReglages(reglages);
   const trains = lues.flatMap((l) => (l.train ? [l.train] : []));
-  // Retour : à égalité de coût complet, le train qui arrive à l'heure du dîner l'emporte (décision du 08/11/2026).
+  // Retour : le train qui arrive à l'heure du dîner l'emporte jusqu'au supplément accepté (décisions des 08 et 09/11/2026).
+  const supplement = Math.max(REFERENTIEL_COUT.supplementDinerMaxCentimes, (parametres ?? defauts).toleranceCentimes);
   const diner = parametres ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, parametres) : null;
   // Jamais de retour avant 17h30 : ces trains restent affichés mais ne sont pas recommandés.
   const tropTot = trains.filter((t) => t.depart < REFERENTIEL_COUT.retourPasAvantMin);
   const candidats = trains.filter((t) => t.depart >= REFERENTIEL_COUT.retourPasAvantMin);
-  const reco = parametres ? recommander(candidats, parametres, (e) => !!diner && e.arriveeGare >= diner.de && e.arriveeGare <= diner.a) : null;
+  const reco = parametres
+    ? recommander(candidats, parametres, {
+        estPrefere: (e) => !!diner && e.arriveeGare >= diner.de && e.arriveeGare <= diner.a,
+        supplementMaxCentimes: REFERENTIEL_COUT.supplementDinerMaxCentimes,
+      })
+    : null;
   const aReverifier = estAReverifier(REFERENTIEL_COUT.meta.verifieLe, new Date());
 
   const maj = (id: string, champ: keyof Omit<LigneTrain, 'id'>, v: string) =>
@@ -162,9 +177,9 @@ export function Comparateur(props: {
       </h1>
       <p class="intro">
         Le coût complet ajoute au billet ce que les horaires vous font dépenser : un repas à bord si vous arrivez chez vous après{' '}
-        {formaterHeure((parametres ?? defauts).limiteDinerDomicileMin)}. À coût égal, le train qui arrive à l’heure du dîner (
-        {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.de)} à {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.a)} en gare) l’emporte, puis celui qui vous
-        ramène le plus tôt. Les retours partent au plus tôt à {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}.
+        {formaterHeure((parametres ?? defauts).limiteDinerDomicileMin)}. Le train qui arrive à l’heure du dîner (
+        {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.de)} à {heureEnClair(REFERENTIEL_COUT.arriveeDinerGare.a)} en gare) l’emporte s’il ne coûte pas plus de{' '}
+        {formaterMontant(supplement)} de plus que le moins cher ; à coût égal, celui qui vous ramène le plus tôt. Les retours partent au plus tôt à {heureEnClair(REFERENTIEL_COUT.retourPasAvantMin)}.
       </p>
       {props.resumeLeviers}
 
@@ -233,7 +248,7 @@ export function Comparateur(props: {
               maxLength={LONGUEUR_REGLAGE}
               libelle="Écart toléré (€)"
               inputMode="decimal"
-              aide="Jusqu’à cet écart compris, le train à l’heure du dîner, puis le plus tôt, l’emporte."
+              aide="Jusqu’à cet écart compris, deux trains sont à égalité : celui qui ramène le plus tôt l’emporte (le retour à l’heure du dîner l’emporte, lui, jusqu’à 30 € de plus)."
               valeur={reglages.tolerance}
               erreur={erreursReglages.tolerance}
               onInput={(v) => setReglages((r) => ({ ...r, tolerance: v }))}

@@ -89,7 +89,11 @@ export function PrixVus(props: {
     }
   });
 
-  const reco = recommanderParPrix(trains, trajet.prixVus, props.p, props.aujourdhui, props.cote === 'retour' ? fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, props.p) : undefined);
+  const diner =
+    props.cote === 'retour'
+      ? { fenetre: fenetreDiner(REFERENTIEL_COUT.arriveeDinerGare, props.p), supplementMaxCentimes: REFERENTIEL_COUT.supplementDinerMaxCentimes }
+      : undefined;
+  const reco = recommanderParPrix(trains, trajet.prixVus, props.p, props.aujourdhui, diner);
   const retenu = reco ? trains.find((t) => clePrix(t) === reco.retenu.id) : undefined;
   const concurrent = reco?.concurrent ? trains.find((t) => clePrix(t) === reco.concurrent!.id) : undefined;
   const dejaChoisi = retenu && trajet.train && clePrix(trajet.train) === clePrix(retenu);
@@ -146,6 +150,9 @@ export function PrixVus(props: {
               concurrent &&
               `À ${formaterMontant(props.p.toleranceCentimes)} près du ${concurrent.numero}, il ${props.cote === 'aller' ? 'arrive' : 'vous ramène'} plus tôt.`}
             {reco.motif === 'egalite-prefere' && concurrent && `À ${formaterMontant(props.p.toleranceCentimes)} près du ${concurrent.numero}, il vous fait arriver à l’heure du dîner.`}
+            {reco.motif === 'prefere' &&
+              concurrent &&
+              `Il vous fait arriver à l’heure du dîner pour ${formaterMontant(reco.retenu.coutCompletCentimes - reco.concurrent!.coutCompletCentimes)} de plus que le ${concurrent.numero} (coût complet, dîner à bord compris) : dans la limite de ${formaterMontant(reco.supplementMaxCentimes ?? REFERENTIEL_COUT.supplementDinerMaxCentimes)} que vous acceptez.`}
             {anciens > 0 && ` ${anciens} prix vu${anciens > 1 ? 's' : ''} il y a plus de 2 jours, non comparé${anciens > 1 ? 's' : ''} : mettez-les à jour.`}
           </p>
           {dejaChoisi ? (
