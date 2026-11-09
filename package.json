@@ -21,7 +21,7 @@
     "check": "npm run typecheck && npm run lint && npm run test"
   },
   "dependencies": {
-    "preact": "11.0.1"
+    "preact": "11.0.2"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
