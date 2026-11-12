@@ -290,6 +290,18 @@ describe('import de la confirmation SNCF Connect (copier-coller)', () => {
     expect(r[0]!.aller.train).toMatchObject({ numero: '6136', arrivee: 562 });
     expect(r[1]!.retour.train).toMatchObject({ numero: '6123', arrivee: 1257 });
   });
+  it('revue : deux déplacements le même jour : l’import répété retrouve le trajet déjà payé, sans payer l’autre', () => {
+    const conf = lireConfirmation('Voyage 1 Marseille Saint-Charles Paris Gare de Lyon 74,00 € Aller : mercredi 15 décembre 2027 à 06:03 Retour : vendredi 7 janvier 2028 à 17:38 TGV INOUI 6136 TGV INOUI 6123');
+    const prevus = [
+      nouveauDeplacement('d-aaaa', '2027-12-15', '2027-12-17'),
+      nouveauDeplacement('d-bbbb', '2027-12-15', '2027-12-16'),
+      nouveauDeplacement('d-cccc', '2028-01-05', '2028-01-07'),
+    ];
+    const une = appliquerConfirmation(prevus, conf, null, nouvelId);
+    const deux = appliquerConfirmation(une.deplacements, conf, null, nouvelId);
+    expect(deux.rapport).toMatchObject({ payes: 0, dejaImportes: 2 });
+    expect(deux.deplacements.filter((d) => d.aller.statut === 'paye')).toHaveLength(1);
+  });
   it('revue : plafond de déplacements atteint : trajets signalés comme tels', () => {
     const pleins = Array.from({ length: 300 }, (_, i) => nouveauDeplacement(`d-${'abcdefghijklmnopqrstuvwxyz'[Math.floor(i / 26) % 26]}${'abcdefghijklmnopqrstuvwxyz'[i % 26]}zz`, '2026-01-05', '2026-01-06'));
     const { rapport } = appliquerConfirmation(pleins, lireConfirmation(miseEnPage), null, nouvelId);

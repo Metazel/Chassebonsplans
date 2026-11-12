@@ -177,7 +177,10 @@ export function appliquerConfirmation(
   /** Déplacement d'un trajet : même jour (de préférence non payé), sinon trajet non payé de la même semaine dont la date peut changer. */
   const trouver = (t: TrajetLu): Deplacement | undefined => {
     const memes = duMemeJour(t);
-    if (memes.length) return memes.find((d) => d[cote(t)].statut !== 'paye') ?? memes[0];
+    // Même jour : d'abord le trajet déjà payé avec ce train (import répété), puis un trajet non payé.
+    const c0 = cote(t);
+    const dejaCeTrain = memes.find((d) => d[c0].statut === 'paye' && d[c0].train?.numero === t.numero && d[c0].train?.depart === t.depart);
+    if (memes.length) return dejaCeTrain ?? memes.find((d) => d[c0].statut !== 'paye') ?? memes[0];
     const c = cote(t);
     return deplacements.find((d) => {
       if (d[c].statut === 'paye' || lundi(d[c].date) !== lundi(t.date) || tous.some((x) => x !== t && x.sens === t.sens && x.date === d[c].date)) return false;
