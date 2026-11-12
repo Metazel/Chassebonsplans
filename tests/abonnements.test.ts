@@ -48,8 +48,8 @@ describe('coût sur un an de chaque formule (2de)', () => {
     const fs = comparerFormules(R, RA, rythme(44, [6000], 50));
     expect(ids(fs)).toEqual(['avantage', 'sans-carte', 'liberte', 'max-actif', 'max-actif-plus']);
     expect(cout(fs, 'sans-carte')).toMatchObject({ coutCentimes: 88 * 6000, couverts: 0, horsFormule: 88 });
-    // 86 trajets croisés à 42 € (−30 %), le premier aller et le dernier retour à 60 €, plus la carte.
-    expect(cout(fs, 'avantage')).toMatchObject({ coutCentimes: 86 * 4200 + 2 * 6000 + 4900, couverts: 86, horsFormule: 2 });
+    // 88 trajets imbriqués à 42 € (−30 %), plus la carte : tout est couvert par lots de deux semaines.
+    expect(cout(fs, 'avantage')).toMatchObject({ coutCentimes: 88 * 4200 + 4900, couverts: 88, horsFormule: 0 });
     // Liberté : 73 € fixe, plus cher que 60 € : aucun trajet n'en profite.
     expect(cout(fs, 'liberte')).toMatchObject({ coutCentimes: 34900 + 88 * 6000, couverts: 0 });
     // MAX ACTIF : les 44 trajets du vendredi restent payants.
@@ -61,12 +61,12 @@ describe('coût sur un an de chaque formule (2de)', () => {
     expect(fs[0]!.id).toBe('max-actif');
     expect(fs[0]!.coutCentimes).toBe(12 * 44100);
     // Avantage : 30 % de 100 € = 70 €, sous le plafond de 89 €.
-    expect(cout(fs, 'avantage').coutCentimes).toBe(86 * 7000 + 2 * 10000 + 4900);
+    expect(cout(fs, 'avantage').coutCentimes).toBe(88 * 7000 + 4900);
     expect(cout(fs, 'liberte').coutCentimes).toBe(34900 + 88 * 7300);
   });
   it('le plafond Avantage s’applique aux billets très chers (plus de 3 h : 89 €)', () => {
     const fs = comparerFormules(R, RA, rythme(10, [15000], 0));
-    expect(cout(fs, 'avantage').coutCentimes).toBe(18 * 8900 + 2 * 15000 + 4900);
+    expect(cout(fs, 'avantage').coutCentimes).toBe(20 * 8900 + 4900);
   });
   it('carte Liberté : prix variés, seuls les billets au-dessus du prix fixe sont ramenés à 73 €', () => {
     const fs = comparerFormules(R, RA, rythme(10, [4000, 12000], 100));
@@ -90,9 +90,10 @@ describe('coût sur un an de chaque formule (2de)', () => {
     expect(cout(comparerFormules(R, RA, rythme(20, [5000], 0)), 'max-actif-plus').couverts).toBe(40);
     expect(cout(comparerFormules(R, RA, rythme(20, [5000], 0)), 'max-actif').couverts).toBe(0);
   });
-  it('un seul aller-retour : la carte Avantage ne couvre rien (pas de croisement possible)', () => {
+  it('un seul aller-retour : la carte Avantage ne couvre rien (pas d’imbrication possible) ; dès deux, tout est couvert', () => {
     const fs = comparerFormules(R, RA, rythme(1, [8000], 100));
     expect(cout(fs, 'avantage')).toMatchObject({ couverts: 0, coutCentimes: 2 * 8000 + 4900 });
+    expect(cout(comparerFormules(R, RA, rythme(2, [8000], 100)), 'avantage')).toMatchObject({ couverts: 4, horsFormule: 0 });
     expect(fs[0]!.id).toBe('sans-carte');
   });
   it('mensualités d’un devis : remplacent celles du référentiel', () => {

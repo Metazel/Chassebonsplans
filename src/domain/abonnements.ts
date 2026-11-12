@@ -3,7 +3,8 @@
  * (allers-retours par an, prix des billets, part des trajets du lundi au jeudi). Indicatif, 2de classe.
  *
  * - Sans carte : chaque trajet au prix habituel.
- * - Carte Avantage : −30 % ou plafond, sur tous les trajets sauf le premier aller et le dernier retour (billets croisés en chaîne).
+ * - Carte Avantage : −30 % ou plafond, sur tous les trajets dès deux allers-retours (billets imbriqués par lots de deux semaines :
+ *   aller de la 1re semaine avec le retour de la 2e, et l'inverse).
  * - Carte Liberté : chaque trajet au moins cher du prix habituel et du prix fixe Liberté.
  * - MAX ACTIF / MAX ACTIF+ : 12 mensualités ; trajets des jours éligibles à 0 € dans la limite des réservations annuelles,
  *   les autres au prix habituel.
@@ -150,8 +151,8 @@ export function comparerFormules(r: ReglesAbonnements, ra: ReglesAvantage, rythm
   const formules: CoutFormule[] = [];
   formules.push({ id: 'sans-carte', coutCentimes: plein(trajets), abonnementCentimes: 0, billetsCentimes: plein(trajets), couverts: 0, horsFormule: trajets, engagementMois: 0 });
 
-  // Carte Avantage : billets croisés en chaîne, tous les trajets couverts sauf le premier aller et le dernier retour.
-  const couvertsAvantage = rythme.allersRetoursParAn >= 2 ? trajets - 2 : 0;
+  // Carte Avantage : billets imbriqués (aller de la 1re semaine avec le retour de la 2e, et l'inverse) : tout est couvert dès deux allers-retours.
+  const couvertsAvantage = rythme.allersRetoursParAn >= 2 ? trajets : 0;
   const prixAvantage = moyenne(rythme.prixCentimes.map((p) => prixAvecCarte(ra, p, rythme.dureeMin)));
   const billetsAvantage = Math.round(couvertsAvantage * prixAvantage) + plein(trajets - couvertsAvantage);
   formules.push({ id: 'avantage', coutCentimes: ra.prixCarteCentimes + billetsAvantage, abonnementCentimes: ra.prixCarteCentimes, billetsCentimes: billetsAvantage, couverts: couvertsAvantage, horsFormule: trajets - couvertsAvantage, engagementMois: 0 });
