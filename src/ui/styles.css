@@ -205,3 +205,9 @@ textarea { font: inherit; width: 100%; min-height: 44px; padding: 0.5rem 0.625re
 .lecture { border: 1px dashed var(--bord); border-radius: 8px; padding: 0.25rem 0.75rem; margin: 0.5rem 0; }
 
 .ideal { color: var(--succes); font-weight: 600; }
+.liste-semaines { list-style: none; padding: 0; margin: 0.5rem 0 1rem; display: grid; gap: 0.75rem; }
+.liste-semaines .champ { margin-top: 0.25rem; }
+.commande { border-top: 1px solid var(--bord); padding-top: 0.5rem; margin-top: 0.75rem; }
+.commande h4 { margin: 0.25rem 0 0.5rem; }
+fieldset.conges { border: 1px solid var(--bord); border-radius: 12px; margin: 0.75rem 0; padding: 0.5rem 1rem 1rem; min-width: 0; }
+.champ.action { justify-content: flex-end; }

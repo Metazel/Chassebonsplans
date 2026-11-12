@@ -6,7 +6,7 @@
 import { useState } from 'preact/hooks';
 import { dateCourte, dateLongue } from '../../domain/dates';
 import { formaterHeure } from '../../domain/heure';
-import { dansLePanier, type ElementPanier, type GroupePanier } from '../../domain/panier';
+import { dansLePanier, type ElementPanier, type GroupePanier, type Lot } from '../../domain/panier';
 import type { Deplacement, Statut } from '../../domain/deplacements';
 import { ExternalLink } from './ExternalLink';
 
@@ -29,6 +29,50 @@ export function Panier(props: {
     props.onAnnonce(oui ? 'Train ajouté à votre panier.' : 'Train retiré du panier.');
   };
 
+  const rendreLot = (lot: Lot) => {
+    const premier = lot.elements[0]!;
+    const second = lot.elements[1];
+    const date = (e: typeof premier) => dateCourte(e.deplacement[e.cote].date);
+    if (lot.type === 'attente') {
+      return (
+        <li key={`attente-${premier.deplacement.id}-${premier.cote}`}>
+          <p class="ar">
+            {LIBELLE[premier.cote]} du {date(premier)} : à réserver avec le trajet du {dateCourte(lot.attente!.date)} (aller-retour {lot.croise ? 'croisé ' : ''}carte
+            Avantage), qui ouvre à la vente le {dateLongue(lot.attente!.ouvertureLe)}.
+          </p>
+          <p class="aide">Attendez cette date pour le réserver en une seule recherche : seul, il ne profiterait pas de la carte.</p>
+        </li>
+      );
+    }
+    const titre =
+      lot.type === 'carte'
+        ? `Aller-retour ${lot.croise ? 'croisé ' : ''}depuis ${lot.origine} : aller ${date(premier)}, retour ${second ? date(second) : ''} — une seule recherche, carte Avantage`
+        : second
+          ? `Aller-retour du ${date(premier)} au ${date(second)} : une seule recherche`
+          : `${LIBELLE[premier.cote]} du ${date(premier)}`;
+    return (
+      <li key={lot.elements.map((e) => `${e.deplacement.id}-${e.cote}`).join('+')}>
+        <p class="ar">{titre}</p>
+        {lot.elements.map(({ deplacement: d, cote }) => {
+          const t = d[cote];
+          const id = `panier-${d.id}-${cote}`;
+          return (
+            <label class="ligne-panier" for={id} key={id}>
+              <input id={id} type="checkbox" checked={t.statut === 'panier'} onChange={(ev) => cocher({ id: d.id, cote }, (ev.currentTarget as HTMLInputElement).checked)} />
+              <span>
+                <strong>
+                  {cote === 'aller' ? 'Marseille → Paris' : 'Paris → Marseille'} {dateCourte(t.date)} · {formaterHeure(t.train!.depart)} → {formaterHeure(t.train!.arrivee)}
+                </strong>{' '}
+                · {t.train!.operateur} n° {t.train!.numero}
+                <span class="sr-only"> : dans le panier</span>
+              </span>
+            </label>
+          );
+        })}
+      </li>
+    );
+  };
+
   return (
     <section class="panier" aria-labelledby="titre-panier">
       <h2 id="titre-panier">Réserver mes trains</h2>
@@ -45,51 +89,36 @@ export function Panier(props: {
           <p>
             <ExternalLink href={g.site.url}>Ouvrir {g.site.nom}</ExternalLink>
           </p>
-          <ul class="liste-panier">
-            {g.lots.map((lot) => {
-              const premier = lot.elements[0]!;
-              const second = lot.elements[1];
-              const date = (e: typeof premier) => dateCourte(e.deplacement[e.cote].date);
-              if (lot.type === 'attente') {
-                return (
-                  <li key={`attente-${premier.deplacement.id}-${premier.cote}`}>
-                    <p class="ar">
-                      {LIBELLE[premier.cote]} du {date(premier)} : à réserver avec le trajet du {dateCourte(lot.attente!.date)} (aller-retour {lot.croise ? 'croisé ' : ''}carte
-                      Avantage), qui ouvre à la vente le {dateLongue(lot.attente!.ouvertureLe)}.
-                    </p>
-                    <p class="aide">Attendez cette date pour le réserver en une seule recherche : seul, il ne profiterait pas de la carte.</p>
-                  </li>
-                );
-              }
-              const titre =
-                lot.type === 'carte'
-                  ? `Aller-retour ${lot.croise ? 'croisé ' : ''}depuis ${lot.origine} : aller ${date(premier)}, retour ${second ? date(second) : ''} — une seule recherche, carte Avantage`
-                  : second
-                    ? `Aller-retour du ${date(premier)} au ${date(second)} : une seule recherche`
-                    : `${LIBELLE[premier.cote]} du ${date(premier)}`;
-              return (
-                <li key={lot.elements.map((e) => `${e.deplacement.id}-${e.cote}`).join('+')}>
-                  <p class="ar">{titre}</p>
-                  {lot.elements.map(({ deplacement: d, cote }) => {
-                    const t = d[cote];
-                    const id = `panier-${d.id}-${cote}`;
-                    return (
-                      <label class="ligne-panier" for={id} key={id}>
-                        <input id={id} type="checkbox" checked={t.statut === 'panier'} onChange={(ev) => cocher({ id: d.id, cote }, (ev.currentTarget as HTMLInputElement).checked)} />
-                        <span>
-                          <strong>
-                            {cote === 'aller' ? 'Marseille → Paris' : 'Paris → Marseille'} {dateCourte(t.date)} · {formaterHeure(t.train!.depart)} → {formaterHeure(t.train!.arrivee)}
-                          </strong>{' '}
-                          · {t.train!.operateur} n° {t.train!.numero}
-                          <span class="sr-only"> : dans le panier</span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </li>
-              );
-            })}
-          </ul>
+          {(() => {
+            const commandes = [...new Set(g.lots.flatMap((l) => (l.commande !== undefined ? [l.commande] : [])))];
+            const autres = g.lots.filter((l) => l.commande === undefined);
+            const dates = (ls: Lot[]) => ls.flatMap((l) => l.elements.map((e) => e.deplacement[e.cote].date)).sort();
+            return (
+              <>
+                {commandes.length > 0 && (
+                  <p class="aide">
+                    Achetez commande par commande : chaque commande réunit des lots de deux semaines (deux billets imbriqués par lot), indépendants les uns des
+                    autres. Payez, puis importez la confirmation ci-dessous.
+                  </p>
+                )}
+                {commandes.map((n) => {
+                  const ls = g.lots.filter((l) => l.commande === n);
+                  const ds = dates(ls);
+                  return (
+                    <div class="commande" key={n}>
+                      <h4 id={`commande-${n}`}>
+                        Commande {n} : {ls.length} billet{ls.length > 1 ? 's' : ''}, du {dateCourte(ds[0]!)} au {dateCourte(ds.at(-1)!)}
+                      </h4>
+                      <ul class="liste-panier" aria-labelledby={`commande-${n}`}>
+                        {ls.map(rendreLot)}
+                      </ul>
+                    </div>
+                  );
+                })}
+                {autres.length > 0 && <ul class="liste-panier">{autres.map(rendreLot)}</ul>}
+              </>
+            );
+          })()}
         </div>
       ))}
       {auPanier.length > 0 && (

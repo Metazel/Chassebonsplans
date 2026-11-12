@@ -49,6 +49,11 @@ import { listePanier } from '../../domain/panier';
 import { Panier } from '../components/Panier';
 import { Avantage } from '../components/Avantage';
 import { Abonnements, prixHabituelLu, texteMontant } from '../components/Abonnements';
+import { Periode } from '../components/Periode';
+import { ImportConfirmation } from '../components/ImportConfirmation';
+import { Bilan } from '../components/Bilan';
+import { appliquerConfirmation } from '../../domain/confirmation';
+import { bilanPayes } from '../../domain/bilan';
 import { echantillonPrix, partLundiJeudi } from '../../domain/abonnements';
 import { REGLES_ABONNEMENTS } from '../../data/abonnements';
 import { PrixVus } from '../components/PrixVus';
@@ -285,6 +290,7 @@ function BlocTrajet(props: {
     const t: Trajet = { ...trajet, statut };
     if (statut !== 'option') delete t.limiteOption;
     if (statut !== 'panier') delete t.panierLe;
+    if (statut !== 'paye') delete t.tarif;
     // Payé : le prix vu du train devient le prix payé s'il n'y en a pas, puis les prix vus sont oubliés.
     if (statut === 'paye') {
       payer(t);
@@ -629,6 +635,7 @@ export function Deplacements(props: {
   const avecTrain = aVenir.filter(aExporter);
   const carteActive = props.avantage.detenue && (!props.avantage.finValidite || props.avantage.finValidite >= aujourdhui);
   const plan = planifier(REGLES_AVANTAGE, deplacements, aujourdhui, {
+    lots: true,
     maintenant,
     ouvertures: OUVERTURES,
     ...(carteActive && props.avantage.finValidite ? { finValidite: props.avantage.finValidite } : {}),
@@ -643,6 +650,31 @@ export function Deplacements(props: {
     props.detenus.has(id),
   );
   const age = h ? ageHoraires(h, aujourdhui) : 0;
+  // Fin de période proposée : le dernier jour en vente ou annoncé à l'ouverture.
+  const finVentes = OUVERTURES.operateurs.flatMap((o) => [o.enVenteJusquau, ...o.ouvertures.map((x) => x.au)]).sort().at(-1) ?? '';
+  const ajouterPeriode = (semaines: { aller: string; retour: string }[]) => {
+    const nouveaux = semaines.map((s) => ({ ...nouveauDeplacement(nouvelId(), s.aller, s.retour), aller: preselection(h, s.aller, 'aller'), retour: preselection(h, s.retour, 'retour') }));
+    setAnnonce(`${nouveaux.length} déplacement${nouveaux.length > 1 ? 's' : ''} ajouté${nouveaux.length > 1 ? 's' : ''}`);
+    focusApres.current = 'titre-liste';
+    props.onChange(trier([...deplacements, ...nouveaux]));
+  };
+  const importer = (c: Parameters<typeof appliquerConfirmation>[1]) => {
+    const { deplacements: liste, rapport: r } = appliquerConfirmation(deplacements, c, h, nouvelId);
+    // Pas de figeage du plan ici : les billets importés portent déjà leur identifiant.
+    props.onChange(liste);
+    const parties = [`${r.payes} trajet${r.payes > 1 ? 's' : ''} marqué${r.payes > 1 ? 's' : ''} payé${r.payes > 1 ? 's' : ''}`];
+    if (r.corriges) parties.push(`dont ${r.corriges} déjà payé${r.corriges > 1 ? 's' : ''}, complété${r.corriges > 1 ? 's' : ''} d’après la confirmation`);
+    if (r.dates) parties.push(`${r.dates} date${r.dates > 1 ? 's' : ''} prévue${r.dates > 1 ? 's' : ''} remplacée${r.dates > 1 ? 's' : ''} par celle du billet`);
+    if (r.crees) parties.push(`${r.crees} déplacement${r.crees > 1 ? 's' : ''} créé${r.crees > 1 ? 's' : ''}`);
+    if (r.dejaImportes) parties.push(`${r.dejaImportes} déjà importé${r.dejaImportes > 1 ? 's' : ''}, inchangé${r.dejaImportes > 1 ? 's' : ''}`);
+    let texte = `${parties.join(', ')}.`;
+    if (r.ignores.length)
+      texte += ` ${r.ignores.length} trajet${r.ignores.length > 1 ? 's' : ''} sans aller ou retour la même semaine, non importé${r.ignores.length > 1 ? 's' : ''} : ${r.ignores
+        .map((t) => `${t.sens === 'MP' ? 'aller' : 'retour'} du ${dateCourte(t.date)}`)
+        .join(', ')}. Ajoutez le déplacement, puis importez de nouveau.`;
+    if (r.horsPlafond.length) texte += ` ${r.horsPlafond.length} trajets non importés : ${MAX_DEPLACEMENTS} déplacements au plus, supprimez-en d’anciens.`;
+    return texte;
+  };
 
   const maj = (d: Deplacement) => changer(deplacements.map((x) => (x.id === d.id ? d : x)));
   const retirer = (d: Deplacement) => {
@@ -739,6 +771,11 @@ export function Deplacements(props: {
         onStatut={(cibles, statut, extra) => changer(changerStatuts(deplacements, cibles, statut, extra))}
         onAnnonce={setAnnonce}
       />
+      <ImportConfirmation onEnregistrer={importer} />
+      <Bilan
+        bilan={bilanPayes(deplacements, aujourdhui, props.parametres, REGLES_AVANTAGE.reductionPourcent, maintenant)}
+        limiteGareMin={props.parametres.limiteDinerDomicileMin - props.parametres.trajetGareDomicileMin}
+      />
       <Avantage
         plan={plan}
         detenue={carteActive}
@@ -784,6 +821,8 @@ export function Deplacements(props: {
           <button type="submit">Ajouter ce déplacement</button>
         </form>
       </section>
+
+      <Periode deplacements={deplacements} aujourdhui={aujourdhui} finVentes={finVentes} places={MAX_DEPLACEMENTS - deplacements.length} onAjouter={ajouterPeriode} />
 
       <section aria-labelledby="titre-liste">
         <h2 id="titre-liste" tabIndex={-1}>
