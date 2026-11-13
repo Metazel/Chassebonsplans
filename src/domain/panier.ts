@@ -24,6 +24,55 @@ export interface Lot {
   elements: { deplacement: Deplacement; cote: 'aller' | 'retour' }[];
   /** Pour « attente » : l'autre trajet et la date d'ouverture de ses ventes. */
   attente?: { date: string; ouvertureLe: string };
+  /** Pour « carte » : numéro de la commande proposée (lots entiers, BILLETS_PAR_COMMANDE billets au plus). */
+  commande?: number;
+}
+
+/** Billets par commande : quatre allers-retours, soit deux lots de deux semaines (pratique du voyageur à l'ouverture des ventes). */
+export const BILLETS_PAR_COMMANDE = 4;
+
+/**
+ * Numérote les commandes : les allers-retours carte reliés par un déplacement (un lot) restent ensemble ;
+ * les lots sont pris dans l'ordre chronologique et regroupés tant que la commande ne dépasse pas `max` billets
+ * (un lot plus grand est découpé).
+ */
+export function numeroterCommandes(lots: Lot[], max = BILLETS_PAR_COMMANDE): void {
+  const cartes = lots.filter((l) => l.type === 'carte');
+  const parent = new Map<string, string>();
+  const racine = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(x, r);
+    return r;
+  };
+  for (const l of cartes) for (const e of l.elements) if (!parent.has(e.deplacement.id)) parent.set(e.deplacement.id, e.deplacement.id);
+  for (const l of cartes) for (const e of l.elements.slice(1)) parent.set(racine(e.deplacement.id), racine(l.elements[0]!.deplacement.id));
+  const composantes = new Map<string, Lot[]>();
+  for (const l of cartes) {
+    const k = racine(l.elements[0]!.deplacement.id);
+    composantes.set(k, [...(composantes.get(k) ?? []), l]);
+  }
+  const debutLot = (l: Lot) => l.elements.map((e) => e.deplacement[e.cote].date).sort()[0] ?? '';
+  const debut = (c: Lot[]) => c.map(debutLot).sort()[0] ?? '';
+  let numero = 0;
+  let taille = max;
+  // Un lot plus grand qu'une commande (chaîne de billets héritée) est découpé par tranches de `max` billets, dans l'ordre.
+  const morceaux = [...composantes.values()]
+    .sort((a, b) => debut(a).localeCompare(debut(b)))
+    .flatMap((c) => {
+      const tries = [...c].sort((a, b) => debutLot(a).localeCompare(debutLot(b)));
+      const res: Lot[][] = [];
+      for (let i = 0; i < tries.length; i += max) res.push(tries.slice(i, i + max));
+      return res;
+    });
+  for (const c of morceaux) {
+    if (taille + c.length > max) {
+      numero++;
+      taille = 0;
+    }
+    taille += c.length;
+    for (const l of c) l.commande = numero;
+  }
 }
 
 export interface GroupePanier {
@@ -95,7 +144,11 @@ export function listePanier(liste: Deplacement[], aujourdhui: string, maintenant
   }
   const rang = (n: string) => (ORDRE_SITES.indexOf(n) < 0 ? ORDRE_SITES.length : ORDRE_SITES.indexOf(n));
   const debut = (l: Lot) => l.elements.map((e) => e.deplacement[e.cote].date).sort()[0] ?? '';
-  for (const g of groupes.values()) g.lots.sort((a, b) => debut(a).localeCompare(debut(b)));
+  for (const g of groupes.values()) {
+    numeroterCommandes(g.lots);
+    // Commandes d'abord, dans leur ordre ; puis le reste, par date.
+    g.lots.sort((a, b) => (a.commande ?? Infinity) - (b.commande ?? Infinity) || debut(a).localeCompare(debut(b)));
+  }
   return [...groupes.values()].sort((a, b) => rang(a.site.nom) - rang(b.site.nom));
 }
 

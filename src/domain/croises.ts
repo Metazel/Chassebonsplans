@@ -122,6 +122,12 @@ export interface OptionsPlan {
   finValidite?: string;
   /** Calendrier des ouvertures de ventes, pour signaler un trajet pas encore en vente. */
   ouvertures?: ReferentielOuvertures;
+  /**
+   * Lots de deux semaines d'abord : deux déplacements consécutifs donnent deux billets imbriqués (aller de la 1re semaine
+   * et retour de la 2e ; retour de la 1re et aller de la 2e). Chaque lot est indépendant. Retenu seulement s'il couvre
+   * autant de trajets que l'appariement général.
+   */
+  lots?: boolean;
 }
 
 const avant = (a: Jambe, b: Jambe) => a.date < b.date || (a.date === b.date && (a.arrivee ?? 0) <= (b.depart ?? 24 * 60));
@@ -219,6 +225,13 @@ export function affectationMax(poids: number[][]): number[] {
  * - Trajet resté seul : aller simple éligible le samedi ou le dimanche, sinon hors carte.
  */
 export function planifier(r: ReglesAvantage, liste: Deplacement[], aujourdhui: string, o: OptionsPlan = {}): PlanAvantage {
+  const general = planifierAvec(r, liste, aujourdhui, o, false);
+  if (!o.lots) return general;
+  const parLots = planifierAvec(r, liste, aujourdhui, o, true);
+  return parLots.eligibles >= general.eligibles ? parLots : general;
+}
+
+function planifierAvec(r: ReglesAvantage, liste: Deplacement[], aujourdhui: string, o: OptionsPlan, lots: boolean): PlanAvantage {
   const toutes = jambesDe(liste, aujourdhui, o);
   const billets: Billet[] = [];
   const pris = new Set<Jambe>();
@@ -239,8 +252,40 @@ export function planifier(r: ReglesAvantage, liste: Deplacement[], aujourdhui: s
   const hors = jambes.filter((j) => !eligibleOperateur(j) || expiree(j));
   const pool = jambes.filter((j) => eligibleOperateur(j) && !expiree(j));
   const simple = (j: Jambe) => (r.joursSimplesEligibles.includes(jourSemaine(j.date)) ? 1 : 0);
-  const mp = pool.filter((j) => j.sens === 'MP');
-  const pm = pool.filter((j) => j.sens === 'PM');
+  let grace = 0;
+  const ajouterAr = (x: Jambe, y: Jambe) => {
+    const [aller, retour] = avant(x, y) ? [x, y] : [y, x];
+    const croise = x.id !== y.id;
+    billets.push({ type: 'ar', croise, origine: aller.sens === 'MP' ? 'Marseille' : 'Paris', aller, retour, engage: false });
+    pris.add(x).add(y);
+    if (croise) grace += 2 - simple(x) - simple(y);
+  };
+  if (lots) {
+    // Déplacements dont les deux trajets sont libres, dans l'ordre : deux consécutifs forment un lot de deux billets imbriqués.
+    const parDeplacement = new Map<string, { mp?: Jambe; pm?: Jambe }>();
+    for (const j of pool) {
+      const e = parDeplacement.get(j.id) ?? {};
+      if (j.sens === 'MP') e.mp = j;
+      else e.pm = j;
+      parDeplacement.set(j.id, e);
+    }
+    const complets = [...parDeplacement.values()]
+      .filter((e): e is { mp: Jambe; pm: Jambe } => !!e.mp && !!e.pm && avant(e.mp, e.pm))
+      .sort((a, b) => a.mp.date.localeCompare(b.mp.date) || a.mp.id.localeCompare(b.mp.id));
+    const eligible = (a: Jambe, b: Jambe) => avant(a, b) && allerRetourEligible(r, a.date, b.date) && 2 - simple(a) - simple(b) > 0;
+    for (let i = 0; i + 1 < complets.length; ) {
+      const s1 = complets[i]!;
+      const s2 = complets[i + 1]!;
+      if (eligible(s1.mp, s2.pm) && eligible(s1.pm, s2.mp)) {
+        ajouterAr(s1.mp, s2.pm);
+        ajouterAr(s1.pm, s2.mp);
+        i += 2;
+      } else i += 1;
+    }
+  }
+  const libres = pool.filter((j) => !pris.has(j));
+  const mp = libres.filter((j) => j.sens === 'MP');
+  const pm = libres.filter((j) => j.sens === 'PM');
   // Poids entier : gain en trajets couverts (×10 000), puis préférence « même déplacement » (+500), puis écart court.
   const poids = mp.map((x) =>
     pm.map((y) => {
@@ -252,16 +297,11 @@ export function planifier(r: ReglesAvantage, liste: Deplacement[], aujourdhui: s
     }),
   );
   const affectation = affectationMax(poids);
-  let grace = 0;
   mp.forEach((x, i) => {
     const k = affectation[i] ?? -1;
     const y = pm[k];
     if (!y || !(poids[i]?.[k] ?? 0)) return;
-    const [aller, retour] = avant(x, y) ? [x, y] : [y, x];
-    const croise = x.id !== y.id;
-    billets.push({ type: 'ar', croise, origine: aller.sens === 'MP' ? 'Marseille' : 'Paris', aller, retour, engage: false });
-    pris.add(x).add(y);
-    if (croise) grace += 2 - simple(x) - simple(y);
+    ajouterAr(x, y);
   });
   for (const j of pool) {
     if (pris.has(j)) continue;
@@ -355,4 +395,28 @@ export function figerBillets(plan: PlanAvantage, liste: Deplacement[], nouvelId:
     }
     return r;
   });
+}
+
+/**
+ * Lots du plan : allers-retours reliés par un même déplacement (deux billets imbriqués forment un lot de deux semaines).
+ * Dans l'ordre chronologique ; un billet engagé ou non compte de la même façon.
+ */
+export function lotsDuPlan(plan: PlanAvantage): Billet[][] {
+  const ars = plan.billets.filter((b): b is Extract<Billet, { type: 'ar' }> => b.type === 'ar');
+  const parent = new Map<string, string>();
+  const racine = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(x, r);
+    return r;
+  };
+  for (const b of ars) for (const id of [b.aller.id, b.retour.id]) if (!parent.has(id)) parent.set(id, id);
+  for (const b of ars) parent.set(racine(b.aller.id), racine(b.retour.id));
+  const groupes = new Map<string, Billet[]>();
+  for (const b of ars) {
+    const k = racine(b.aller.id);
+    groupes.set(k, [...(groupes.get(k) ?? []), b]);
+  }
+  const debut = (bs: Billet[]) => bs.map((b) => (b.type === 'ar' ? b.aller.date : '')).sort()[0] ?? '';
+  return [...groupes.values()].sort((a, b) => debut(a).localeCompare(debut(b)));
 }

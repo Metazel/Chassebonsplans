@@ -45,7 +45,7 @@ function detail(f: CoutFormule, prixMoyen: number, mensualite: number, devis: bo
     case 'sans-carte':
       return `${pluriel(f.horsFormule, 'trajet')} à ${formaterMontant(Math.round(prixMoyen))} en moyenne.`;
     case 'avantage':
-      return `Carte ${formaterMontant(f.abonnementCentimes)} ; ${f.couverts ? `${pluriel(f.couverts, 'trajet')} à −30 % ou au plafond (billets croisés)` : 'aucun trajet réduit'}${payants ? `, ${payants}` : ''}.`;
+      return `Carte ${formaterMontant(f.abonnementCentimes)} ; ${f.couverts ? `${pluriel(f.couverts, 'trajet')} à −30 % ou au plafond (billets imbriqués)` : 'aucun trajet réduit'}${payants ? `, ${payants}` : ''}.`;
     case 'liberte':
       return `Carte ${formaterMontant(f.abonnementCentimes)} ; ${f.couverts ? `${pluriel(f.couverts, 'trajet')} ramené${f.couverts > 1 ? 's' : ''} au prix fixe de ${formaterMontant(R.liberte.prixFixeCentimes)}` : `aucun billet au-dessus du prix fixe de ${formaterMontant(R.liberte.prixFixeCentimes)}`}${payants ? `, ${payants}` : ''}.`;
     default:
@@ -305,7 +305,10 @@ export function Abonnements(props: {
         </div>
       )}
       <ul class="aide hypotheses">
-        <li>Carte Avantage : estimation maximale, billets croisés d’une semaine à l’autre (une nuit de week-end dans chaque aller-retour) ; un prix déjà réduit baisse moins.</li>
+        <li>
+          Carte Avantage : estimation maximale, billets imbriqués par lots de deux semaines (une nuit de week-end dans chaque aller-retour) ; un prix déjà réduit
+          baisse moins.
+        </li>
         <li>
           Carte Liberté : prix fixe de {formaterMontant(R.liberte.prixFixeCentimes)} sur TGV INOUI, même en dernière minute, billet échangeable et remboursable ; plus le prix
           habituel varie, plus elle rapporte : laissez le prix habituel vide pour calculer sur vos prix réels.

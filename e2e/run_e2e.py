@@ -845,7 +845,7 @@ def abonnements(browser: Browser) -> None:
     # Rythme de David : 44 allers-retours à 60 €, retours le vendredi → carte Avantage (billets croisés).
     zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")
     zone.get_by_label("Allers-retours par an (estimation)").fill("44")
-    expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 3\s781,00\s€ sur un an, soit 1\s499,00\s€ de moins que sans carte\."))
+    expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 3\s745,00\s€ sur un an, soit 1\s535,00\s€ de moins que sans carte\."))
     lignes = zone.locator("tbody tr")
     expect(lignes).to_have_count(5)
     expect(lignes.first).to_contain_text("Carte Avantage le moins cher")
@@ -854,7 +854,7 @@ def abonnements(browser: Browser) -> None:
     # Trajets chers, tous du lundi au jeudi : MAX ACTIF l'emporte.
     zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("100")
     zone.get_by_label("Trajets du lundi au jeudi (%)").fill("100")
-    expect(verdict).to_contain_text(re.compile(r"MAX ACTIF : 5\s292,00\s€ sur un an, soit 3\s508,00\s€ de moins que sans carte et 977,00\s€ de moins que Carte Avantage\."))
+    expect(verdict).to_contain_text(re.compile(r"MAX ACTIF : 5\s292,00\s€ sur un an, soit 3\s508,00\s€ de moins que sans carte et 917,00\s€ de moins que Carte Avantage\."))
     expect(zone.get_by_label("Trajets du lundi au jeudi (%)")).to_have_attribute("aria-describedby", "part-lundi-jeudi-aide")
     expect(zone.locator("#part-lundi-jeudi-aide")).to_contain_text("Votre estimation")
     # Mensualité du devis : 600 € par mois, MAX ACTIF ne vaut plus le coup.
@@ -885,7 +885,7 @@ def abonnements(browser: Browser) -> None:
     champ.blur()
     zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("")
     expect(zone.locator("#prix-habituel-aide")).to_contain_text("Laissé vide : le prix payé ou vu sur le site pour votre train (TGV INOUI ou Intercités).")
-    expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 5\s025,00\s€ sur un an"))
+    expect(verdict).to_contain_text(re.compile(r"Carte Avantage : 4\s977,00\s€ sur un an"))
     attendre_enregistrement(page, lambda p: "prixHabituelCentimes" not in p)
     # Abonnement déclaré dans Mes leviers : signalé dans la comparaison.
     page.goto(URL + "#leviers")
@@ -900,6 +900,91 @@ def abonnements(browser: Browser) -> None:
     zone.get_by_label("Prix habituel d’un trajet sans carte (€)").fill("60")
     expect(zone.locator("tbody")).to_contain_text("MAX ACTIF (vous l’avez)")
     shot(page, "abonnements")
+    assert not errors, errors
+    assert not external, external
+
+
+@scenario("Itération 8 — préparer une ouverture des ventes : période sans fériés ni congés, commandes de lots imbriqués, import de la confirmation, bilan")
+def ouverture_ventes(browser: Browser) -> None:
+    page, errors, external = new_page(browser, vue="deplacements", bypass_csp=True)  # injection d'axe-core
+    periode = page.get_by_role("region", name="Préparer une période")
+    # Fin de période proposée : le dernier jour en vente ou annoncé (02/07/2027).
+    expect(periode.get_by_label("Au", exact=True)).to_have_value("2027-07-02")
+    # Erreur liée au champ.
+    periode.get_by_label("Du", exact=True).fill("2026-12-14")
+    periode.get_by_label("Au", exact=True).fill("2026-12-01")
+    periode.get_by_role("button", name="Voir les semaines").click()
+    expect(periode.get_by_label("Au", exact=True)).to_have_attribute("aria-invalid", "true")
+    expect(periode.locator("#periode-err")).to_contain_text("La fin de la période doit suivre son début.")
+    # Jours fériés (Etalab) : Noël et le 1er janvier tombent un vendredi, semaines écartées par défaut.
+    periode.get_by_label("Au", exact=True).fill("2027-01-08")
+    periode.get_by_role("button", name="Voir les semaines").click()
+    semaines = periode.locator("ul.liste-semaines > li")
+    expect(semaines).to_have_count(4)
+    expect(periode).to_contain_text("Semaine du lun. 21 déc. : aller jeu. 24 déc., retour ven. 25 déc. — jour férié : Jour de Noël")
+    expect(periode.locator("#semaine-2026-12-28")).not_to_be_checked()
+    # Période en vente au 01/11 : du 16/11 au 18/12, congés la semaine du 14/12 ; aller le mercredi la 1re semaine.
+    periode.get_by_label("Du", exact=True).fill("2026-11-16")
+    periode.get_by_label("Au", exact=True).fill("2026-12-18")
+    periode.get_by_role("button", name="Ajouter des congés").click()
+    periode.get_by_label("Congés 1 : du").fill("2026-12-14")
+    periode.get_by_label("Congés 1 : au").fill("2026-12-18")
+    periode.get_by_role("button", name="Voir les semaines").click()
+    expect(semaines).to_have_count(5)
+    expect(periode.locator("#semaine-2026-12-14")).not_to_be_checked()
+    expect(periode).to_contain_text("— vos congés")
+    periode.get_by_label("Aller de la semaine du lun. 16 nov.").select_option("2026-11-18")
+    periode.get_by_role("button", name="Ajouter 4 déplacements").click()
+    expect(page.get_by_role("heading", level=2, name="À venir")).to_be_focused()
+    expect(page.locator("li.deplacement")).to_have_count(4)
+    expect(page.get_by_role("heading", level=2, name="Du mer. 18 nov. au ven. 20 nov.")).to_be_visible()
+    # Carte Avantage déclarée : la liste d'achat regroupe deux lots imbriqués en une commande de 4 billets.
+    page.goto(URL + "#leviers")
+    page.get_by_label("Carte Avantage Adulte (27-59 ans)").check()
+    attendre_enregistrement(page, lambda p: "carte-avantage-adulte" in p.get("leviers", {}))
+    page.goto(URL + "#deplacements")
+    panier = page.get_by_role("region", name="Réserver mes trains")
+    expect(panier.get_by_role("heading", level=4)).to_have_text(["Commande 1 : 4 billets, du mer. 18 nov. au ven. 11 déc."])
+    expect(panier.locator(".commande li")).to_have_count(4)
+    expect(panier).to_contain_text("Aller-retour croisé depuis Marseille : aller mer. 18 nov., retour ven. 27 nov.")
+    expect(panier).to_contain_text("Aller-retour croisé depuis Paris : aller ven. 20 nov., retour jeu. 26 nov.")
+    # Import de la confirmation collée (texte anonymisé et décalé d'une commande réelle).
+    texte = (Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "confirmation-courriel.txt").read_text(encoding="utf-8")
+    zone = page.get_by_role("region", name="J’ai payé : importer la confirmation")
+    zone.get_by_label("Texte de la confirmation de commande").fill(texte)
+    zone.get_by_role("button", name="Lire la confirmation").click()
+    expect(zone.get_by_role("heading", level=3)).to_have_text(re.compile(r"4 billets lus, 336,00\s€"))
+    expect(zone.locator("ol li").first).to_contain_text("Aller-retour 74,00 €, tarif Avantage : Marseille → Paris mer. 15 déc. à 06:03 (TGV INOUI 6136) ; puis Paris → Marseille ven. 7 janv. à 17:38 (TGV INOUI 6123).")
+    # Accessibilité de l'aperçu, des commandes et des semaines, en clair et en sombre, et à 320 px.
+    periode.get_by_role("button", name="Voir les semaines").click()
+    expect(periode.locator("ul.liste-semaines")).to_contain_text("déjà prévue")
+    for scheme in ("light", "dark"):
+        page.emulate_media(color_scheme=scheme)
+        violations = axe(page)
+        assert not violations, f"{scheme} ouverture: {violations}"
+    page.set_viewport_size({"width": 320, "height": 640})
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth"), "défilement horizontal à 320 px (ouverture)"
+    zone.get_by_role("button", name="Enregistrer ces billets payés").click()
+    expect(zone.locator(".succes")).to_have_text("8 trajets marqués payés, 4 déplacements créés.")
+    expect(zone.get_by_label("Texte de la confirmation de commande")).to_have_value("")
+    bilan = page.get_by_role("region", name="Bilan de vos billets payés")
+    expect(bilan).to_contain_text(re.compile(r"8 trajets payés à venir : 336,00\s€, soit 42,00\s€ par trajet"))
+    expect(bilan).to_contain_text(re.compile(r"au moins 144,00\s€ d’économie sur 8 trajets"))
+    assert not axe(page), "bilan : violations axe-core"
+    # Minimisation : ni nom, ni référence, ni moyen de paiement dans le stockage ; billets engagés communs aux deux semaines.
+    p = attendre_enregistrement(page, lambda p: len(p.get("deplacements", [])) == 8)
+    brut = json.dumps(p, ensure_ascii=False)
+    for interdit in ("Martin", "REF", "9999", "exemple.fr"):
+        assert interdit not in brut, interdit
+    assert not re.search(r"HP\d", brut), "référence de commande stockée"
+    payes = [d for d in p["deplacements"] if d["aller"]["date"] == "2027-12-15"]
+    assert payes and payes[0]["aller"]["statut"] == "paye" and payes[0]["aller"]["prixCentimes"] == 3700 and payes[0]["aller"]["billet"], payes
+    # Coller deux fois la même confirmation ne change rien.
+    zone.get_by_label("Texte de la confirmation de commande").fill(texte)
+    zone.get_by_role("button", name="Lire la confirmation").click()
+    zone.get_by_role("button", name="Enregistrer ces billets payés").click()
+    expect(zone.locator(".succes")).to_have_text("0 trajet marqué payé, 8 déjà importés, inchangés.")
+    shot(page, "ouverture-ventes")
     assert not errors, errors
     assert not external, external
 
@@ -1001,7 +1086,7 @@ def main() -> int:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, abonnements, prix_reels, retour_heure_diner, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
+            for fn in (deplacement_ajout, deplacement_ferie, deplacement_saisie, deplacement_reservation, deplacement_suppression, horaires_indisponibles, horaires_publies, source_absente, horaires_non_publies, purge_24_mois, suppression_multiple, liste_panier, ouverture_ventes, alerte_petit_prix, avantage_interet, avantage_plan, abonnements, ouverture_ventes, prix_reels, retour_heure_diner, sandwich, moins_cher, saisie_invalide, train_incomplet, reglage_invalide, reglages, ajout_retrait, leviers_persistants, levier_expire, mes_donnees, reglage_long, deux_onglets, navigation, accessibilite, reflow, clavier, csp, hors_ligne, aucune_requete_tierce):
                 fn(browser)
             browser.close()
     finally:

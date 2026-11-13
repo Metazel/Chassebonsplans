@@ -35,6 +35,8 @@ export interface Trajet {
   billet?: string;
   /** Prix vus sur le site de vente, par train. */
   prixVus?: PrixVu[];
+  /** Tarif du billet payé, lu sur la confirmation de commande (carte de réduction appliquée). */
+  tarif?: 'avantage' | 'liberte';
 }
 
 export interface Deplacement {
@@ -92,6 +94,7 @@ function lireTrajet(v: unknown): Trajet | null {
   if (prixVus) trajet.prixVus = prixVus;
   // La date limite d'une option ne peut pas dépasser le jour du trajet.
   if (t.statut === 'option' && estDateIso(t.limiteOption) && t.limiteOption <= t.date) trajet.limiteOption = t.limiteOption;
+  if (t.statut === 'paye' && (t.tarif === 'avantage' || t.tarif === 'liberte')) trajet.tarif = t.tarif;
   if (Number.isInteger(t.prixCentimes) && (t.prixCentimes as number) >= 0 && (t.prixCentimes as number) <= 100_000) trajet.prixCentimes = t.prixCentimes as number;
   if (Number.isInteger(t.prixCibleCentimes) && (t.prixCibleCentimes as number) > 0 && (t.prixCibleCentimes as number) <= 100_000) trajet.prixCibleCentimes = t.prixCibleCentimes as number;
   return trajet;
@@ -167,6 +170,7 @@ export function changerStatuts(
       const t: Trajet = { ...r[c.cote], statut };
       delete t.limiteOption;
       delete t.panierLe;
+      if (statut !== 'paye') delete t.tarif;
       if (statut === 'panier' && extra.le) t.panierLe = extra.le;
       if (statut === 'option' && extra.limiteOption) t.limiteOption = extra.limiteOption < t.date ? extra.limiteOption : t.date;
       if (statut === 'paye') payer(t);
